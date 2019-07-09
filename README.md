@@ -1,1 +1,1 @@
-# aws-ssm-ss
+# go-ssmss
