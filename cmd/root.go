@@ -3,30 +3,30 @@ package cmd
 import (
 	"fmt"
 	"os"
+
 	"github.com/spf13/cobra"
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
-
 )
 
-
-var cfgFile string
-
+var (
+	confFile string
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "cmd",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Use:   "ssmsm",
+	Short: "The ssmss is a convenient tool supporting a interactive CLI for the AWS Systems Manger Session Manager",
+	Long: `The ssmss is useful when you will connect your aws server using start-session, ssh under the AWS Systems Manger Session Manager.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+It supports interactive CLI and so you could select your aws server that would like to connect quickly.
+`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
+	Run: func(cmd *cobra.Command, args []string) {
+
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -45,38 +45,44 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cmd.yaml)")
-
+	rootCmd.PersistentFlags().StringVar(&confFile, "config", "", "conf file (default is $HOME/.ssmsm.yaml)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.Flags().StringP("profile", "p", "default", "if you is registered multiple profiles for AWS in config file, you could select one of profiles")
 }
-
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := homedir.Dir()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		// Search config in home directory with name ".cmd" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".cmd")
+	home, err := homedir.Dir()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
+	if confFile != "" {
+		viper.SetConfigFile(confFile)
+	} else {
+		viper.AddConfigPath(home)
+		viper.SetConfigType("yaml")
+	}
+
+	// main viper config
 	viper.AutomaticEnv() // read in environment variables that match
 
-	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	} else {
+		awsconf := fmt.Sprintf("%s/.aws/config", home)
+		awscred := fmt.Sprintf("%s/.aws/credentials", home)
+		_, confErr := os.Stat(awsconf)
+		_, credErr := os.Stat(awscred)
+		if !os.IsNotExist(confErr) && !os.IsNotExist(credErr) {
+			defaultconf := fmt.Sprintf("%s/.ssmsm.yaml", home)
+
+			_ = defaultconf
+
+			// TODO: config, credentials 이용해서 yaml 파일 생성
+		}
 	}
 }
-
