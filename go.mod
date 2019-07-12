@@ -1,4 +1,4 @@
-module github.com/gjbae1212/ssmsm
+module github.com/gjbae1212/gossm
 
 go 1.12
 
