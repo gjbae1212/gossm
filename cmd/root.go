@@ -4,25 +4,40 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+
+	"github.com/aws/aws-sdk-go/aws/session"
+
 	"github.com/spf13/cobra"
 
-	homedir "github.com/mitchellh/go-homedir"
+	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
 )
 
 var (
-	confFile string
-)
+	// default aws session
+	awsSession *session.Session
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "gossm",
-	Short: "gossm is a convenient tool supporting a interactive CLI for the AWS Systems Manger Session Manager and Run Command",
-	Long: `gossm is useful when you will connect or send your aws server using start-session, ssh, run-command under the AWS Systems Manger. 
+	// rootCmd represents the base command when called without any subcommands
+	rootCmd = &cobra.Command{
+		Use:   "gossm",
+		Short: "gossm is a convenient tool supporting a interactive CLI about the AWS Systems Manger Session Manager and Run Command",
+		Long: `gossm is useful when you will connect or send your AWS server using start-session, ssh, run-command under the AWS Systems Manger. 
 
-gossm supports interactive CLI and so you could select your aws server that would like to connect quickly.
+gossm supports interactive CLI and so you could select your AWS server that would like to connect quickly.
 `,
-}
+	}
+
+	// default aws regions
+	defaultRegions = []string{
+		"us-east-1", "us-east-2", "us-west-1", "us-west-2",
+		"eu-north-1", "eu-west-3", "eu-west-2", "eu-west-1", "eu-central-1",
+		"ap-south-1", "ap-northeast-2", "ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
+		"sa-east-1",
+		"ca-central-1",
+	}
+)
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
@@ -39,54 +54,72 @@ func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
-	rootCmd.PersistentFlags().StringVar(&confFile, "config", "", "conf file (default is $HOME/.ssmsm.yaml)")
+	rootCmd.PersistentFlags().StringP("cred", "c", "", "aws credentials file (default is $HOME/.aws/.credentials)")
+	rootCmd.PersistentFlags().StringP("profile", "p", "default", "[optional] if you are having multiple profiles in config, it is one of profiles")
+	rootCmd.PersistentFlags().StringP("region", "r", "", "[optional] it is region in AWS that would like to do something")
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().StringP("profile", "p", "default", "[optional] if you are having multiple profiles in config, it is one of profiles (default is default)")
-	rootCmd.Flags().StringP("instance", "i", "", "[optional] it is instance-id of server in AWS that  would like to something")
-	rootCmd.Flags().StringP("region", "r", "", "[optional] it is region in AWS that would like to do something")
-
-	// bind PersistentFlags to viper
-	// TODO: 연결 PersistentFlags() 를  viper에 연결
-
+	// mapping viper
+	viper.BindPFlag("profile", rootCmd.PersistentFlags().Lookup("profile"))
+	viper.BindPFlag("region", rootCmd.PersistentFlags().Lookup("region"))
 }
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
+	var err error
 	home, err := homedir.Dir()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	if confFile != "" {
-		viper.SetConfigFile(confFile)
-	} else {
-		viper.AddConfigPath(home)
-		viper.SetConfigType("yaml")
-	}
-
-	// main viper config
+	// mapping viper from config file, here's don't use.
+	viper.AddConfigPath(home)
+	viper.SetConfigType("")
 	viper.AutomaticEnv() // read in environment variables that match
-
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
-	} else {
-		awscred := fmt.Sprintf("%s/.aws/credentials", home)
-		awsconf := fmt.Sprintf("%s/.aws/config", home)
-
-		_, confErr := os.Stat(awsconf)
-		_, credErr := os.Stat(awscred)
-		defaultconf := fmt.Sprintf("%s/.ssmsm.yaml", home)
-		if !os.IsNotExist(credErr) {
-
-		}
-
-		if !os.IsNotExist(confErr) {
-		}
-
-		_ = defaultconf
-		// TODO: config, credentials 이용해서 yaml 파일 생성
 	}
+
+	// get credentials
+	credFile, err := rootCmd.Flags().GetString("cred")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	// get profile
+	profile, err := rootCmd.Flags().GetString("profile")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	// get session
+	if credFile != "" {
+		awsSession, err = session.NewSession(&aws.Config{
+			Credentials: credentials.NewSharedCredentials(credFile, profile),
+		})
+	} else {
+		awsSession, err = session.NewSessionWithOptions(session.Options{
+			Profile:           profile,
+			SharedConfigState: session.SharedConfigEnable,
+		})
+	}
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	// mapping viper
+	cred, err := awsSession.Config.Credentials.Get()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	viper.Set("accesskey", cred.AccessKeyID)
+	viper.Set("secretkey", cred.SecretAccessKey)
+	if viper.GetString("region") == "" {
+		viper.Set("region", *awsSession.Config.Region)
+	}
+	awsSession.Config.WithRegion(viper.GetString("region"))
 }
