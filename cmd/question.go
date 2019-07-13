@@ -31,7 +31,7 @@ func askRegion() (region string, err error) {
 
 	if suberr := survey.AskOne(prompt, &region, survey.WithIcons(func(icons *survey.IconSet) {
 		icons.SelectFocus.Format = "green+hb"
-	})); suberr != nil {
+	}), survey.WithPageSize(20)); suberr != nil {
 		err = suberr
 		return
 	}
@@ -72,6 +72,10 @@ func askInstance(region string) (instance string, err error) {
 	}
 	sort.Strings(options)
 
+	if len(options) == 0 {
+		return
+	}
+
 	prompt := &survey.Select{
 		Message: "Choose a instance in AWS:",
 		Options: options,
@@ -80,7 +84,7 @@ func askInstance(region string) (instance string, err error) {
 	selectKey := ""
 	if suberr := survey.AskOne(prompt, &selectKey, survey.WithIcons(func(icons *survey.IconSet) {
 		icons.SelectFocus.Format = "green+hb"
-	})); suberr != nil {
+	}), survey.WithPageSize(20)); suberr != nil {
 		err = suberr
 		return
 	}

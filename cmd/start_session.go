@@ -11,8 +11,8 @@ import (
 var (
 	startSessionCommand = &cobra.Command{
 		Use:   "start-session",
-		Short: "Start `start-session` under ssm with interactive cli",
-		Long:  "Start `start-session` under ssm with interactive cli",
+		Short: "Start `start-session` under AWS SSM with interactive CLI",
+		Long:  "Start `start-session` under AWS SSM with interactive CLI",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			// set region
 			if err := setEnvRegion(); err != nil {
