@@ -2,13 +2,51 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/AlecAivazis/survey/v2"
+	"os"
+	"os/exec"
+	"os/signal"
 	"sort"
+	"syscall"
+
+	"github.com/AlecAivazis/survey/v2"
+	"github.com/aws/aws-sdk-go/service/ec2"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/spf13/viper"
 )
 
+// Get params from interactive CLI and then its params set to viper
+func setEnvRegion() error {
+	// if region don't exist, get region from prompt
+	var region = viper.GetString("region")
+	if region == "" {
+		region, err := askRegion()
+		if err != nil {
+			return err
+		}
+		viper.Set("region", region)
+	}
+	return nil
+}
+
+func setInstance() error {
+	region := viper.GetString("region")
+	if region == "" {
+		return fmt.Errorf("[err] unknown region")
+	}
+
+	instance := viper.GetString("instance")
+	if instance == "" {
+		instance, err := askInstance(region)
+		if err != nil {
+			return err
+		}
+		viper.Set("instance", instance)
+	}
+	return nil
+}
+
+// interactive CLI
 func askRegion() (region string, err error) {
 	var regions []string
 	svc := ec2.New(awsSession, aws.NewConfig().WithRegion("us-east-1"))
@@ -90,4 +128,33 @@ func askInstance(region string) (instance string, err error) {
 	}
 	instance = table[selectKey]
 	return
+}
+
+// Call command
+func callSubprocess(process string, args ...string) error {
+	call := exec.Command(process, args...)
+	call.Stderr = os.Stderr
+	call.Stdout = os.Stdout
+	call.Stdin = os.Stdin
+
+	// ignore signal(sigint)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT)
+	done := make(chan bool, 1)
+	go func() {
+		for {
+			select {
+			case <-sigs:
+			case <-done:
+				break
+			}
+		}
+	}()
+	defer close(done)
+
+	// run subprocess
+	if err := call.Run(); err != nil {
+		return err
+	}
+	return nil
 }
