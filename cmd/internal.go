@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 
 	"github.com/aws/aws-sdk-go/aws"
+	. "github.com/logrusorgru/aurora"
 	"github.com/spf13/viper"
 )
 
@@ -169,4 +170,12 @@ func callSubprocess(process string, args ...string) error {
 		return err
 	}
 	return nil
+}
+
+func printReady(cmd string) {
+	profile := viper.GetString("profile")
+	region := viper.GetString("region")
+	target := viper.GetString("target")
+	fmt.Printf("[%s] profile: %s, region: %s, target: %s\n", Green(cmd), Yellow(profile),
+		Yellow(region), Yellow(target))
 }

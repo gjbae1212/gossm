@@ -31,6 +31,7 @@ var (
 				fmt.Println(Red(err))
 				os.Exit(1)
 			}
+			printReady("start-session")
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			svc := ssm.New(awsSession, aws.NewConfig().WithRegion(viper.GetString("region")))
