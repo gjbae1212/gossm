@@ -2,13 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/AlecAivazis/survey/v2"
 	"os"
 	"os/exec"
 	"os/signal"
 	"sort"
 	"syscall"
 
-	"github.com/AlecAivazis/survey/v2"
 	"github.com/aws/aws-sdk-go/service/ec2"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -18,31 +18,43 @@ import (
 // Get params from interactive CLI and then its params set to viper
 func setEnvRegion() error {
 	// if region don't exist, get region from prompt
+	var err error
 	var region = viper.GetString("region")
 	if region == "" {
-		region, err := askRegion()
+		region, err = askRegion()
 		if err != nil {
 			return err
 		}
 		viper.Set("region", region)
 	}
+
+	if region == "" {
+		return fmt.Errorf("[err] don't exist region \n")
+	}
+
 	return nil
 }
 
-func setInstance() error {
+func setTarget() error {
 	region := viper.GetString("region")
 	if region == "" {
-		return fmt.Errorf("[err] unknown region")
+		return fmt.Errorf("[err] don't exist region \n")
 	}
 
-	instance := viper.GetString("instance")
-	if instance == "" {
-		instance, err := askInstance(region)
+	var err error
+	target := viper.GetString("target")
+	if target == "" {
+		target, err = askTarget(region)
 		if err != nil {
 			return err
 		}
-		viper.Set("instance", instance)
+		viper.Set("target", target)
 	}
+
+	if target == "" {
+		return fmt.Errorf("[err] don't exist running instances \n")
+	}
+
 	return nil
 }
 
@@ -76,7 +88,7 @@ func askRegion() (region string, err error) {
 	return
 }
 
-func askInstance(region string) (instance string, err error) {
+func askTarget(region string) (target string, err error) {
 	svc := ec2.New(awsSession, aws.NewConfig().WithRegion(region))
 	input := &ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{
@@ -115,7 +127,7 @@ func askInstance(region string) (instance string, err error) {
 	}
 
 	prompt := &survey.Select{
-		Message: "Choose a instance in AWS:",
+		Message: "Choose a target in AWS:",
 		Options: options,
 	}
 
@@ -126,7 +138,7 @@ func askInstance(region string) (instance string, err error) {
 		err = suberr
 		return
 	}
-	instance = table[selectKey]
+	target = table[selectKey]
 	return
 }
 
