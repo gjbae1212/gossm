@@ -22,8 +22,8 @@ var (
 	// rootCmd represents the base command when called without any subcommands
 	rootCmd = &cobra.Command{
 		Use:   "gossm",
-		Short: "gossm is a convenient tool supporting a interactive CLI about the AWS Systems Manger Session Manager and Run Command",
-		Long: `gossm is useful when you will connect or send your AWS server using start-session, ssh, run-command under the AWS Systems Manger. 
+		Short: "gossm is a convenient tool supporting a interactive CLI about the AWS Systems Manger Session Manager",
+		Long: `gossm is useful when you will connect or send your AWS server using start-session, ssh, scp under the AWS Systems Manger. 
 
 gossm supports interactive CLI and so you could select your AWS server that would like to connect quickly.
 `,

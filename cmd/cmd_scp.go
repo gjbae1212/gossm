@@ -7,18 +7,16 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/service/ssm"
-
-	"github.com/spf13/viper"
-
 	. "github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
-	sshCommand = &cobra.Command{
-		Use:   "ssh",
-		Short: "Exec `ssh` under AWS SSM with interactive CLI",
-		Long:  "Exec `ssh` under AWS SSM with interactive CLI",
+	scpCommand = &cobra.Command{
+		Use:   "scp",
+		Short: "Exec `scp` under AWS SSM with interactive CLI",
+		Long:  "Exec `scp` under AWS SSM with interactive CLI",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			// set region
 			if err := setRegion(); err != nil {
@@ -27,16 +25,16 @@ var (
 			}
 
 			// set ssh
-			if err := setSSH(); err != nil {
+			if err := setSCP(); err != nil {
 				fmt.Println(Red(err))
 				os.Exit(1)
 			}
 
-			printReady("ssh")
-			fmt.Printf("%s\n", Green("ssh "+viper.GetString("ssh-exec")))
+			printReady("scp")
+			fmt.Printf("%s\n", Green("scp "+viper.GetString("scp-exec")))
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			exec := viper.GetString("ssh-exec")
+			exec := viper.GetString("scp-exec")
 			region := viper.GetString("region")
 			profile := viper.GetString("profile")
 			target := viper.GetString("target")
@@ -70,13 +68,13 @@ var (
 			// call ssh
 			proxy := fmt.Sprintf("ProxyCommand=%s '%s' %s %s %s '%s' %s",
 				"session-manager-plugin", string(sessJson), region, "StartSession", profile, string(paramsJson), endpoint)
-			sshArgs := []string{"-o", proxy}
+			scpArgs := []string{"-o", proxy}
 			for _, sep := range strings.Split(exec, " ") {
 				if sep != "" {
-					sshArgs = append(sshArgs, sep)
+					scpArgs = append(scpArgs, sep)
 				}
 			}
-			if err := callSubprocess("ssh", sshArgs...); err != nil {
+			if err := callSubprocess("scp", scpArgs...); err != nil {
 				fmt.Println(Red(err))
 				// delete Session
 				if err := deleteStartSession(region, *sess.SessionId); err != nil {
@@ -90,10 +88,10 @@ var (
 
 func init() {
 	// add sub command
-	sshCommand.Flags().StringP("exec", "e", "", "[required] ssh $exec, ex) \"-i ex.pem ubuntu@server\"")
+	scpCommand.Flags().StringP("exec", "e", "", "[required] scp $exec, ex) \"-i ex.pem ubuntu@server:/home/ex.txt ex.txt\"")
 
 	// mapping viper
-	viper.BindPFlag("ssh-exec", sshCommand.Flags().Lookup("exec"))
+	viper.BindPFlag("scp-exec", scpCommand.Flags().Lookup("exec"))
 
-	rootCmd.AddCommand(sshCommand)
+	rootCmd.AddCommand(scpCommand)
 }
