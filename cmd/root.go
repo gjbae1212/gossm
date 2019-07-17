@@ -2,16 +2,19 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
+
+	"github.com/gjbae1212/gossm/plugin"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-
 	"github.com/aws/aws-sdk-go/aws/session"
 
-	"github.com/spf13/cobra"
-
+	. "github.com/logrusorgru/aurora"
 	"github.com/mitchellh/go-homedir"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
@@ -43,7 +46,7 @@ gossm supports interactive CLI and so you could select your AWS server that woul
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		fmt.Println(Red(err))
 		os.Exit(1)
 	}
 }
@@ -70,7 +73,7 @@ func initConfig() {
 	var err error
 	home, err := homedir.Dir()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(Red(err))
 		os.Exit(1)
 	}
 
@@ -79,20 +82,48 @@ func initConfig() {
 	viper.SetConfigType("")
 	viper.AutomaticEnv() // read in environment variables that match
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+		fmt.Println("using config file:", viper.ConfigFileUsed())
+	}
+
+	// check session-manager-plugin
+	configDir := filepath.Join(home, ".gossm")
+	pluginFpath := filepath.Join(configDir, "session-manager-plugin")
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		err := os.MkdirAll(configDir, os.ModePerm)
+		if err != nil {
+			fmt.Println(Red(err))
+			os.Exit(1)
+		}
+	}
+	// create session-manager-plugin
+	viper.Set("plugin", "session-manager-plugin")
+	if _, err := os.Stat(pluginFpath); os.IsNotExist(err) {
+		bys, err := plugin.GetPlugin()
+		if err != nil {
+			fmt.Println(Yellow("using default session-manager-plugin"))
+		} else {
+			if err := ioutil.WriteFile(pluginFpath, bys, 0755); err != nil {
+				fmt.Println(Yellow("using default session-manager-plugin"))
+			}
+			viper.Set("plugin", pluginFpath)
+		}
+	} else if err == nil {
+		viper.Set("plugin", pluginFpath)
+	} else {
+		fmt.Println(Yellow("using default session-manager-plugin"))
 	}
 
 	// get credentials
 	credFile, err := rootCmd.Flags().GetString("cred")
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(Red(err))
 		os.Exit(1)
 	}
 
 	// get profile
 	profile, err := rootCmd.Flags().GetString("profile")
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(Red(err))
 		os.Exit(1)
 	}
 
@@ -108,14 +139,14 @@ func initConfig() {
 		})
 	}
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(Red(err))
 		os.Exit(1)
 	}
 
 	// mapping viper
 	cred, err := awsSession.Config.Credentials.Get()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(Red(err))
 		os.Exit(1)
 	}
 	viper.Set("accesskey", cred.AccessKeyID)

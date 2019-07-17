@@ -56,7 +56,8 @@ var (
 			}
 
 			// call session-manager-plugin
-			if err := callSubprocess("session-manager-plugin", string(sessJson),
+			plug := viper.GetString("plugin")
+			if err := callSubprocess(plug, string(sessJson),
 				region, "StartSession", profile, string(paramsJson), endpoint); err != nil {
 				fmt.Println(Red(err))
 				// delete Session

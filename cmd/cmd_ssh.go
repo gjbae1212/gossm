@@ -68,8 +68,9 @@ var (
 			}
 
 			// call ssh
+			plug := viper.Get("plugin")
 			proxy := fmt.Sprintf("ProxyCommand=%s '%s' %s %s %s '%s' %s",
-				"session-manager-plugin", string(sessJson), region, "StartSession", profile, string(paramsJson), endpoint)
+				plug, string(sessJson), region, "StartSession", profile, string(paramsJson), endpoint)
 			sshArgs := []string{"-o", proxy}
 			for _, sep := range strings.Split(exec, " ") {
 				if sep != "" {

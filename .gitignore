@@ -3,3 +3,5 @@ vendor
 test
 log
 gossm
+packrd
+plugin/plugin-packr.go
