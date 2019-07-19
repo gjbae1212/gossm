@@ -28,7 +28,8 @@ func TestFindInstanceId(t *testing.T) {
 		Profile:           "default",
 		SharedConfigState: session.SharedConfigEnable,
 	})
-	if err == nil {
+	assert.NoError(err)
+	if _, err = awsSession.Config.Credentials.Get(); err == nil {
 		_, err = findInstanceIdByIp("us-east-1", "")
 		assert.NoError(err)
 	}
