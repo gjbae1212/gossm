@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/AlecAivazis/survey/v2"
 	"net"
 	"os"
 	"os/exec"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/AlecAivazis/survey/v2"
 
 	"github.com/aws/aws-sdk-go/service/ssm"
 
@@ -218,7 +219,6 @@ func askTarget(region string) (target string, err error) {
 	}
 
 	table := make(map[string]string)
-	keyFormat := fmt.Sprint("%s\t(%s)")
 	for _, rv := range output.Reservations {
 		for _, inst := range rv.Instances {
 			name := ""
@@ -228,7 +228,7 @@ func askTarget(region string) (target string, err error) {
 					break
 				}
 			}
-			table[fmt.Sprintf(keyFormat, name, *inst.InstanceId)] = *inst.InstanceId
+			table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = *inst.InstanceId
 		}
 	}
 

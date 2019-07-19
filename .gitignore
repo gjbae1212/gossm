@@ -3,5 +3,6 @@ vendor
 test
 log
 gossm
-packrd
-plugin/plugin-packr.go
+gossm.exe
+test
+coverage.txt

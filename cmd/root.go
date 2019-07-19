@@ -25,11 +25,8 @@ var (
 	// rootCmd represents the base command when called without any subcommands
 	rootCmd = &cobra.Command{
 		Use:   "gossm",
-		Short: "gossm is a convenient tool supporting a interactive CLI about the AWS Systems Manger Session Manager",
-		Long: `gossm is useful when you will connect or send your AWS server using start-session, ssh, scp under the AWS Systems Manger. 
-
-gossm supports interactive CLI and so you could select your AWS server that would like to connect quickly.
-`,
+		Short: `gossm is interactive CLI tool that you select server in AWS and then could connect or send files your AWS server using start-session, ssh, scp in AWS Systems Manger Session Manager.`,
+		Long:  `gossm is interactive CLI tool that you select server in AWS and then could connect or send files your AWS server using start-session, ssh, scp in AWS Systems Manger Session Manager.`,
 	}
 
 	// default aws regions
@@ -87,7 +84,7 @@ func initConfig() {
 
 	// check session-manager-plugin
 	configDir := filepath.Join(home, ".gossm")
-	pluginFpath := filepath.Join(configDir, "session-manager-plugin")
+	pluginFpath := filepath.Join(configDir, plugin.GetPluginFileName())
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		err := os.MkdirAll(configDir, os.ModePerm)
 		if err != nil {
@@ -96,7 +93,7 @@ func initConfig() {
 		}
 	}
 	// create session-manager-plugin
-	viper.Set("plugin", "session-manager-plugin")
+	viper.Set("plugin", plugin.GetPluginFileName())
 	if _, err := os.Stat(pluginFpath); os.IsNotExist(err) {
 		bys, err := plugin.GetPlugin()
 		if err != nil {
