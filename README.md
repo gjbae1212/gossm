@@ -19,22 +19,27 @@ As well as files can send using scp.
      
 ## Prerequisite 
 - [required] Your ec2 servers in aws are installed [aws ssm agent](https://docs.aws.amazon.com/systems-manager/latest/userguide/ssm-agent.html).
-EC2 severs have to apply AmazonEC2RoleforSSM iam policy.     
+EC2 severs have to apply **AmazonEC2RoleforSSM** iam policy.     
 If you would like to use ssh, scp command using gossm, aws ssm agent version 2.3.672.0 or later is installed on ec2. 
 - [required] **aws access key**, **aws secret key**
 - [required] **ec2:DescribeInstances**, **ssm:StartSession permission**    
 - [optional] It's better to possibly get to additional permission for **ec2:DescribeRegions**, **ssm:TerminateSession**
 
 ## Install
-```bash
+Support **x86_64**
+```bash 
 # homebrew
+$ brew tap gjbae1212/gossm
+$ brew install gossm
 
 # mac
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.0.0/gossm_1.0.0_Darwin_x86_64.tar.gz
 
 # linux
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.0.0/gossm_1.0.0_Linux_x86_64.tar.gz
 
 # window
-
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.0.0/gossm_1.0.0_Windows_x86_64.tar.gz
 ```
 
 ## How to use
@@ -46,14 +51,15 @@ If you would like to use ssh, scp command using gossm, aws ssm agent version 2.3
 | -r             | (optional) region in AWS that would like to connect |  |
 | -t             | (optional) instanceId of server in AWS that would like to connect | |
 
-- If your machine don't exist $HOME/.aws/.credentials, have to pass `-c` args.  
+If your machine don't exist $HOME/.aws/.credentials, have to pass `-c` args.  
 ```
 # credentials file format
 [default]
 aws_access_key_id = AWS ACCESS KEY
 aws_secret_access_key = AWS SECRET KEY
-```
-- `-r` or `-t` don't pass args, it can select through interactive CLI.  
+``` 
+  
+`-r` or `-t` don't pass args, it can select through interactive CLI.  
     
 ### command
 #### start
