@@ -54,21 +54,36 @@ aws_access_key_id = AWS ACCESS KEY
 aws_secret_access_key = AWS SECRET KEY
 ```
 - `-r` or `-t` don't pass args, it can select through interactive CLI.  
+    
 ### command
 #### start
-<p align="center">
-<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/start.gif" width="500", height="450" />
-</p>
+```bash
+$ gossm start 
+```
 
-#### ssh
+#### ssh, scp
+`-e` must pass args.   
+`-e` args is command and args when usually used to pass ssh or scp.
+```bash
+# ssh(if pem is already registered using ssh-add)
+$ gossm ssh -e 'user@server-domain'
+
+# ssh(if pem isn't registered)
+$ gossm ssh -e '-i key.pem user@server-domain'
+
+# scp(if pem is already registered using ssh-add)
+$ gossm scp -e 'file user@server-domain:/home/blahblah'
+
+# scp(if pem isn't registered)
+$ gossm scp -e '-i key.pem file user@server-domain:/home/blahblah'
+
+```
+
+**ex)**  
 <p align="center">
 <img src="https://storage.googleapis.com/gjbae1212-asset/gossm/ssh.gif" width="500", height="450" />
 </p> 
 
-### scp
-<p align="center">
-<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/scp.gif" width="500", height="450" />
-</p>
 
 ## LICENSE
 This project is following The MIT.
