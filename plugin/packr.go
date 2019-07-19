@@ -26,10 +26,12 @@ func init() {
 	pluginBox = packr.New("pluginBox", "./")
 }
 
+// GetPlugin is returning plugin.
 func GetPlugin() ([]byte, error) {
 	return pluginBox.Find(pluginKey)
 }
 
+// GetPluginFileName is returning plugin name.
 func GetPluginFileName() string {
 	return pluginFileName
 }
