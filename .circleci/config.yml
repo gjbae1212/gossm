@@ -1,0 +1,22 @@
+version: 2
+jobs:
+  build:
+    working_directory: /go/src/github.com/gjbae1212/gossm
+
+    branches:
+      only:
+        - master
+
+    docker:
+      - image: golang:1.12
+
+    environment:
+      GOPATH: /go
+
+    steps:
+      - checkout
+      - run:
+          name: RUN UNIT TEST
+          environment:
+            GO111MODULE: "on"
+          command: bash script.sh test
