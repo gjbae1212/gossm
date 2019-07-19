@@ -2,7 +2,7 @@
 
 gossm is interactive CLI tool that you should select server in AWS and then could connect or send files your AWS server using start-session, ssh, scp under AWS Systems Manger Session Manager.
 <p align="center">
-<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/start.gif" width="400", height="250" />
+<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/start.gif" width="500", height="450" />
 </p>
 
 <p align="center"/>
@@ -57,17 +57,17 @@ aws_secret_access_key = AWS SECRET KEY
 ### command
 #### start
 <p align="center">
-<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/start.gif" width="400", height="250" />
+<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/start.gif" width="500", height="450" />
 </p>
 
 #### ssh
 <p align="center">
-<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/ssh.gif" width="400", height="250" />
+<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/ssh.gif" width="500", height="450" />
 </p> 
 
 ### scp
 <p align="center">
-<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/scp.gif" width="400", height="250" />
+<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/scp.gif" width="500", height="450" />
 </p>
 
 ## LICENSE
