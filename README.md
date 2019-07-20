@@ -15,7 +15,9 @@
 ## Overview
 `gossm` is interactive CLI tool that is related AWS Systems Manger Session Manager.
 It can select a ec2 server installed aws-ssm-agent and then can connect its server using start-session, ssh.
-As well as files can send using scp.
+As well as files can send using scp.  
+If you will use `gossm` tool, this mean there will no need to open inbound 22 port in your ec2 server when is using ssh or scp command.  
+Because AWS Systems Manger Session Manager is using ssh protocol tunneling.   
      
 ## Prerequisite 
 - [required] Your ec2 servers in aws are installed [aws ssm agent](https://docs.aws.amazon.com/systems-manager/latest/userguide/ssm-agent.html).
