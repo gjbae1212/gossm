@@ -48,7 +48,7 @@ $ wget https://github.com/gjbae1212/gossm/releases/download/v1.0.0/gossm_1.0.0_W
 ### global command args
 | args           | Description                                               | Default                |
 | ---------------|-----------------------------------------------------------|------------------------|
-| -c             | (optional) aws credentials file | $HOME/.aws/.credentials |
+| -c             | (optional) aws credentials file | $HOME/.aws/credentials |
 | -p             | (optional) if you are having multiple aws profiles in credentials, it is name one of profiles | default |
 | -r             | (optional) region in AWS that would like to connect |  |
 | -t             | (optional) instanceId of server in AWS that would like to connect | |
