@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/AlecAivazis/survey/v2"
 	"net"
 	"os"
 	"os/exec"
@@ -11,8 +12,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/AlecAivazis/survey/v2"
 
 	"github.com/aws/aws-sdk-go/service/ssm"
 
@@ -58,7 +57,10 @@ func setSCP() error {
 	case len(dstSeps) == 2:
 		ips, err = net.LookupIP(dstSeps[1])
 	default:
-		return setTarget()
+		return fmt.Errorf("[err] invalid scp args")
+	}
+	if err != nil {
+		return fmt.Errorf("[err] invalid server domain name")
 	}
 
 	for _, ip := range ips {
@@ -69,7 +71,7 @@ func setSCP() error {
 	}
 
 	if serverIP == "" {
-		return setTarget()
+		return fmt.Errorf("[err] not found server domain name in DNS")
 	}
 
 	// find instanceId By ip
@@ -77,12 +79,12 @@ func setSCP() error {
 	if err != nil {
 		return err
 	}
-	if instanceId != "" {
-		viper.Set("target", instanceId)
-		return nil
+	if instanceId == "" {
+		return fmt.Errorf("[err] not found your server")
 	}
 
-	return setTarget()
+	viper.Set("target", instanceId)
+	return nil
 }
 
 // Set ssh  from interactive CLI and then its params set to viper
