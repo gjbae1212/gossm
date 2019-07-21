@@ -91,10 +91,14 @@ var (
 
 func init() {
 	// add sub command
-	sshCommand.Flags().StringP("exec", "e", "", "[required] ssh $exec, ex) \"-i ex.pem ubuntu@server\"")
+	sshCommand.Flags().StringP("exec", "e", "", "[optional] ssh $exec, ex) \"-i ex.pem ubuntu@server\"")
+
+	sshCommand.Flags().StringP("identity", "i", "", "[optional] identity file path, ex) $HOME/.ssh/id_rsa")
 
 	// mapping viper
 	viper.BindPFlag("ssh-exec", sshCommand.Flags().Lookup("exec"))
+
+	viper.BindPFlag("ssh-identity", sshCommand.Flags().Lookup("identity"))
 
 	rootCmd.AddCommand(sshCommand)
 }

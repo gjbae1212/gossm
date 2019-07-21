@@ -89,12 +89,16 @@ func setSCP() error {
 
 // Set ssh  from interactive CLI and then its params set to viper
 func setSSH() error {
-	if viper.GetString("ssh-exec") == "" {
-		return fmt.Errorf("[err] [required] exec argument")
-	}
-
 	if viper.GetString("region") == "" {
 		return fmt.Errorf("[err] don't exist region")
+	}
+
+	if viper.GetString("ssh-exec") == "" {
+		return setSSHWithCLI()
+	} else {
+		exec := generateExecCommand(viper.GetString("ssh-exec"),
+			viper.GetString("ssh-identity"), "", "")
+		viper.Set("ssh-exec", exec)
 	}
 
 	// parse command
@@ -105,7 +109,9 @@ func setSSH() error {
 	server := lastArgSeps[len(lastArgSeps)-1]
 	ips, err := net.LookupIP(server)
 	if err != nil {
-		return setTarget()
+		fmt.Printf("%s\n\n", Red("[err] Invalid exec command"))
+		fmt.Printf("%s\n\n", Yellow("[changing] CLI mode"))
+		return setSSHWithCLI()
 	}
 
 	// lookup domain
@@ -117,7 +123,9 @@ func setSSH() error {
 		}
 	}
 	if serverIP == "" {
-		return setTarget()
+		fmt.Printf("%s\n\n", Red("[err] Invalid domain name"))
+		fmt.Printf("%s\n\n", Yellow("[changing] CLI mode"))
+		return setSSHWithCLI()
 	}
 
 	// find instanceId By ip
@@ -125,12 +133,11 @@ func setSSH() error {
 	if err != nil {
 		return err
 	}
-	if instanceId != "" {
-		viper.Set("target", instanceId)
-		return nil
+	if instanceId == "" {
+		return fmt.Errorf("[err] not found matching server in your AWS.")
 	}
-
-	return setTarget()
+	viper.Set("target", instanceId)
+	return nil
 }
 
 // Set region from interactive CLI and then its params set to viper
@@ -162,12 +169,14 @@ func setTarget() error {
 
 	var err error
 	target := viper.GetString("target")
+	publicdns := ""
 	if target == "" {
-		target, err = askTarget(region)
+		target, publicdns, err = askTarget(region)
 		if err != nil {
 			return err
 		}
 		viper.Set("target", target)
+		viper.Set("publicdns", publicdns)
 	}
 
 	if target == "" {
@@ -177,7 +186,45 @@ func setTarget() error {
 	return nil
 }
 
+// Set user from interactive CLI and then its params set to viper
+func setUser() error {
+	user, err := askUser()
+	if err != nil {
+		return err
+	}
+	viper.Set("user", user)
+	return nil
+}
+
+func setSSHWithCLI() error {
+	viper.Set("ssh-exec", "")
+	if err := setTarget(); err != nil {
+		return err
+	}
+	if err := setUser(); err != nil {
+		return err
+	}
+	exec := generateExecCommand("",
+		viper.GetString("ssh-identity"),
+		viper.GetString("user"),
+		viper.GetString("publicdns"))
+	viper.Set("ssh-exec", exec)
+	return nil
+}
+
 // interactive CLI
+func askUser() (user string, err error) {
+	prompt := &survey.Input{
+		Message: "Type your connect user (default: root):",
+	}
+	survey.AskOne(prompt, &user)
+	user = strings.TrimSpace(user)
+	if user == "" {
+		user = "root"
+	}
+	return
+}
+
 func askRegion() (region string, err error) {
 	var regions []string
 	svc := ec2.New(awsSession, aws.NewConfig().WithRegion("us-east-1"))
@@ -207,7 +254,7 @@ func askRegion() (region string, err error) {
 	return
 }
 
-func askTarget(region string) (target string, err error) {
+func askTarget(region string) (target, publicdns string, err error) {
 	svc := ec2.New(awsSession, aws.NewConfig().WithRegion(region))
 	input := &ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{
@@ -220,7 +267,7 @@ func askTarget(region string) (target string, err error) {
 		return
 	}
 
-	table := make(map[string]string)
+	table := make(map[string][]string)
 	for _, rv := range output.Reservations {
 		for _, inst := range rv.Instances {
 			name := ""
@@ -230,7 +277,7 @@ func askTarget(region string) (target string, err error) {
 					break
 				}
 			}
-			table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = *inst.InstanceId
+			table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = []string{*inst.InstanceId, *inst.PublicDnsName}
 		}
 	}
 
@@ -256,7 +303,8 @@ func askTarget(region string) (target string, err error) {
 		err = suberr
 		return
 	}
-	target = table[selectKey]
+	target = table[selectKey][0]
+	publicdns = table[selectKey][1]
 	return
 }
 
@@ -345,4 +393,28 @@ func findInstanceIdByIp(region, ip string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// Generate ssh-exec
+func generateExecCommand(exec, identity, user, domain string) (newExec string) {
+	if exec == "" {
+		newExec = fmt.Sprintf("%s@%s", user, domain)
+	} else {
+		newExec = exec
+	}
+
+	opt := false
+	for _, sep := range strings.Split(newExec, " ") {
+		if sep == "-i" {
+			opt = true
+			break
+		}
+	}
+	// if current ssh-exec don't exist -i option
+	if !opt && identity != "" {
+		// injection -i option
+		newExec = fmt.Sprintf("-i %s %s", identity, newExec)
+	}
+
+	return
 }
