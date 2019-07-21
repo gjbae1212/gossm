@@ -70,7 +70,7 @@ $ gossm start
 ```
 
 #### ssh, scp
-`-e` must pass args.   
+`-e` must pass args when is using scp.   
 `-e` args is command and args when usually used to pass ssh or scp.
 ```bash
 # ssh(if pem is already registered using ssh-add)
@@ -79,6 +79,12 @@ $ gossm ssh -e 'user@server-domain'
 # ssh(if pem isn't registered)
 $ gossm ssh -e '-i key.pem user@server-domain'
 
+# ssh(if pem is already registered using ssh-add and don't pass -e option) -> select server using interactive cli
+$ gossm ssh
+
+# ssh(if pem isn't registered and don't pass -e option) -> select server using interactive cli
+$ gossm ssh -i key.pem
+ 
 # scp(if pem is already registered using ssh-add)
 $ gossm scp -e 'file user@server-domain:/home/blahblah'
 
