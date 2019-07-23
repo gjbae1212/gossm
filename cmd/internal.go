@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/AlecAivazis/survey/v2"
 	"net"
 	"os"
 	"os/exec"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/AlecAivazis/survey/v2"
 
 	"github.com/aws/aws-sdk-go/service/ssm"
 
@@ -177,6 +178,15 @@ func setTarget() error {
 		}
 		viper.Set("target", target)
 		viper.Set("publicdns", publicdns)
+	} else {
+		publicdns, err = findDomainByInstanceId(region, target)
+		if err != nil {
+			return err
+		}
+		if publicdns == "" {
+			return fmt.Errorf("[err] don't exist running instances \n")
+		}
+		viper.Set("publicdns", publicdns)
 	}
 
 	if target == "" {
@@ -255,30 +265,10 @@ func askRegion() (region string, err error) {
 }
 
 func askTarget(region string) (target, publicdns string, err error) {
-	svc := ec2.New(awsSession, aws.NewConfig().WithRegion(region))
-	input := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}},
-		},
-	}
-	output, suberr := svc.DescribeInstances(input)
+	table, suberr := findInstances(region)
 	if suberr != nil {
 		err = suberr
 		return
-	}
-
-	table := make(map[string][]string)
-	for _, rv := range output.Reservations {
-		for _, inst := range rv.Instances {
-			name := ""
-			for _, tag := range inst.Tags {
-				if *tag.Key == "Name" {
-					name = *tag.Value
-					break
-				}
-			}
-			table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = []string{*inst.InstanceId, *inst.PublicDnsName}
-		}
 	}
 
 	options := make([]string, 0, len(table))
@@ -389,6 +379,57 @@ func findInstanceIdByIp(region, ip string) (string, error) {
 		for _, inst := range rv.Instances {
 			if ip == *inst.PublicIpAddress || ip == *inst.PrivateIpAddress {
 				return *inst.InstanceId, nil
+			}
+		}
+	}
+	return "", nil
+}
+
+func findInstances(region string) (map[string][]string, error) {
+	svc := ec2.New(awsSession, aws.NewConfig().WithRegion(region))
+	input := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}},
+		},
+	}
+	output, err := svc.DescribeInstances(input)
+	if err != nil {
+		return nil, err
+	}
+
+	table := make(map[string][]string)
+	for _, rv := range output.Reservations {
+		for _, inst := range rv.Instances {
+			name := ""
+			for _, tag := range inst.Tags {
+				if *tag.Key == "Name" {
+					name = *tag.Value
+					break
+				}
+			}
+
+			table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = []string{*inst.InstanceId, *inst.PublicDnsName}
+		}
+	}
+	return table, nil
+}
+
+func findDomainByInstanceId(region string, instanceId string) (string, error) {
+	svc := ec2.New(awsSession, aws.NewConfig().WithRegion(region))
+	input := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}},
+		},
+	}
+
+	output, err := svc.DescribeInstances(input)
+	if err != nil {
+		return "", err
+	}
+	for _, rv := range output.Reservations {
+		for _, inst := range rv.Instances {
+			if *inst.InstanceId == instanceId {
+				return *inst.PublicDnsName, nil
 			}
 		}
 	}
