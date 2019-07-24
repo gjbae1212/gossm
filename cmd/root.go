@@ -55,8 +55,9 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 	rootCmd.PersistentFlags().StringP("cred", "c", "", "aws credentials file (default is $HOME/.aws/.credentials)")
-	rootCmd.PersistentFlags().StringP("profile", "p", "default", "[optional] if you are having multiple aws profiles in config, it is one of profiles")
-	rootCmd.PersistentFlags().StringP("region", "r", "", "[optional] it is region in AWS that would like to do something")
+	rootCmd.PersistentFlags().StringP("profile", "p", "", `
+[optional] if you are having multiple aws profiles, it is one of profiles (default is AWS_PROFILE environment variable or default)`)
+	rootCmd.PersistentFlags().StringP("region", "r", "", `[optional] it is region in AWS that would like to do something`)
 	rootCmd.PersistentFlags().StringP("target", "t", "", "[optional] it is instanceId of server in AWS that would like to something")
 
 	// mapping viper
@@ -118,38 +119,51 @@ func initConfig() {
 	}
 
 	// get profile
-	profile, err := rootCmd.Flags().GetString("profile")
+	profile := viper.GetString("profile")
+
+	// get session
+	awsSession, profile, err = makeSession(credFile, profile)
 	if err != nil {
 		fmt.Println(Red(err))
 		os.Exit(1)
 	}
 
-	// get session
-	if credFile != "" {
-		awsSession, err = session.NewSession(&aws.Config{
-			Credentials: credentials.NewSharedCredentials(credFile, profile),
-		})
-	} else {
-		awsSession, err = session.NewSessionWithOptions(session.Options{
-			Profile:           profile,
-			SharedConfigState: session.SharedConfigEnable,
-		})
-	}
+	cred, err := awsSession.Config.Credentials.Get()
 	if err != nil {
+		fmt.Println(Red(fmt.Sprintf("[profile] %s", profile)))
 		fmt.Println(Red(err))
 		os.Exit(1)
 	}
 
 	// mapping viper
-	cred, err := awsSession.Config.Credentials.Get()
-	if err != nil {
-		fmt.Println(Red(err))
-		os.Exit(1)
-	}
+	viper.Set("profile", profile)
 	viper.Set("accesskey", cred.AccessKeyID)
 	viper.Set("secretkey", cred.SecretAccessKey)
 	if viper.GetString("region") == "" {
 		viper.Set("region", *awsSession.Config.Region)
 	}
 	awsSession.Config.WithRegion(viper.GetString("region"))
+}
+
+func makeSession(credFile, profile string) (*session.Session, string, error) {
+	if profile == "" {
+		profile = "default"
+		if os.Getenv("AWS_PROFILE") != "" {
+			profile = os.Getenv("AWS_PROFILE")
+		}
+	}
+
+	// if cred args is exist.
+	if credFile != "" {
+		sess, err := session.NewSession(&aws.Config{
+			Credentials: credentials.NewSharedCredentials(credFile, profile)})
+		return sess, profile, err
+	}
+
+	// default cred
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Profile:           profile,
+		SharedConfigState: session.SharedConfigEnable,
+	})
+	return sess, profile, err
 }
