@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -170,27 +171,53 @@ func setTarget() error {
 
 	var err error
 	target := viper.GetString("target")
-	publicdns := ""
+	domain := ""
 	if target == "" {
-		target, publicdns, err = askTarget(region)
+		target, domain, err = askTarget(region)
 		if err != nil {
 			return err
 		}
 		viper.Set("target", target)
-		viper.Set("publicdns", publicdns)
+		viper.Set("domain", domain)
 	} else {
-		publicdns, err = findDomainByInstanceId(region, target)
+		domain, err = findDomainByInstanceId(region, target)
 		if err != nil {
 			return err
 		}
-		if publicdns == "" {
+		if domain == "" {
 			return fmt.Errorf("[err] don't exist running instances \n")
 		}
-		viper.Set("publicdns", publicdns)
+		viper.Set("domain", domain)
 	}
 
+	return nil
+}
+
+// Set targets from interactive CLI and then its params set to viper
+func setMultiTarget() error {
+	region := viper.GetString("region")
+	if region == "" {
+		return fmt.Errorf("[err] don't exist region \n")
+	}
+
+	target := viper.GetString("target")
 	if target == "" {
-		return fmt.Errorf("[err] don't exist running instances \n")
+		targets, domains, err := askMultiTarget(region)
+		if err != nil {
+			return err
+		}
+		viper.Set("targets", targets)
+		viper.Set("domains", domains)
+	} else {
+		domain, err := findDomainByInstanceId(region, target)
+		if err != nil {
+			return err
+		}
+		if domain == "" {
+			return fmt.Errorf("[err] don't exist running instances \n")
+		}
+		viper.Set("targets", []string{target})
+		viper.Set("domains", []string{domain})
 	}
 
 	return nil
@@ -217,7 +244,7 @@ func setSSHWithCLI() error {
 	exec := generateExecCommand("",
 		viper.GetString("ssh-identity"),
 		viper.GetString("user"),
-		viper.GetString("publicdns"))
+		viper.GetString("domain"))
 	viper.Set("ssh-exec", exec)
 	return nil
 }
@@ -264,7 +291,7 @@ func askRegion() (region string, err error) {
 	return
 }
 
-func askTarget(region string) (target, publicdns string, err error) {
+func askTarget(region string) (target, domain string, err error) {
 	table, suberr := findInstances(region)
 	if suberr != nil {
 		err = suberr
@@ -294,7 +321,42 @@ func askTarget(region string) (target, publicdns string, err error) {
 		return
 	}
 	target = table[selectKey][0]
-	publicdns = table[selectKey][1]
+	domain = table[selectKey][1]
+	return
+}
+
+func askMultiTarget(region string) (targets, domains []string, err error) {
+	table, suberr := findInstances(region)
+	if suberr != nil {
+		err = suberr
+		return
+	}
+
+	options := make([]string, 0, len(table))
+	for k, _ := range table {
+		options = append(options, k)
+	}
+	sort.Strings(options)
+
+	if len(options) == 0 {
+		return
+	}
+
+	prompt := &survey.MultiSelect{
+		Message: "Choose targets in AWS:",
+		Options: options,
+	}
+
+	var selectKeys []string
+	if suberr := survey.AskOne(prompt, &selectKeys, survey.WithPageSize(20)); suberr != nil {
+		err = suberr
+		return
+	}
+
+	for _, k := range selectKeys {
+		targets = append(targets, table[k][0])
+		domains = append(domains, table[k][1])
+	}
 	return
 }
 
@@ -334,6 +396,68 @@ func printReady(cmd string) {
 	target := viper.GetString("target")
 	fmt.Printf("[%s] profile: %s, region: %s, target: %s\n", Green(cmd), Yellow(profile),
 		Yellow(region), Yellow(target))
+}
+
+// sendCommand is to request aws ssm to run command.
+func sendCommand(region string, targets []string, command string) (*ssm.SendCommandOutput, error) {
+	svc := ssm.New(awsSession, aws.NewConfig().WithRegion(region))
+
+	// only support to linux (window = "AWS-RunPowerShellScript")
+	docName := "AWS-RunShellScript"
+
+	// set timeout 60 seconds
+	timeout := int64(60)
+	input := &ssm.SendCommandInput{
+		DocumentName:   &docName,
+		InstanceIds:    aws.StringSlice(targets),
+		TimeoutSeconds: &timeout,
+		CloudWatchOutputConfig: &ssm.CloudWatchOutputConfig{
+			CloudWatchOutputEnabled: aws.Bool(true),
+		},
+		Parameters: map[string][]*string{
+			"commands": aws.StringSlice([]string{command}),
+		},
+	}
+
+	return svc.SendCommand(input)
+}
+
+// printCommandInvocation prints result for sendCommand.
+func printCommandInvocation(region string, inputs []*ssm.GetCommandInvocationInput) {
+	svc := ssm.New(awsSession, aws.NewConfig().WithRegion(region))
+	wg := new(sync.WaitGroup)
+
+	for _, input := range inputs {
+		wg.Add(1)
+		go func(input *ssm.GetCommandInvocationInput) {
+			subctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+			defer cancel()
+		Exit:
+			for {
+				select {
+				case <-time.After(1 * time.Second):
+					output, err := svc.GetCommandInvocationWithContext(subctx, input)
+					if err != nil {
+						fmt.Println(Red(err))
+						break Exit
+					}
+					status := strings.ToLower(*output.Status)
+					switch status {
+					case "pending", "inprogress", "delayed":
+					case "success":
+						fmt.Printf("[%s] %s\n", Yellow(*output.InstanceId), Green(*output.StandardOutputContent))
+						break Exit
+					default:
+						fmt.Printf("[%s] %s\n", Yellow(*output.InstanceId), Red(*output.StandardErrorContent))
+						break Exit
+					}
+				}
+			}
+			wg.Done()
+		}(input)
+	}
+
+	wg.Wait()
 }
 
 // Create start session
