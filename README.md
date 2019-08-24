@@ -18,7 +18,10 @@ It can select a ec2 server installed aws-ssm-agent and then can connect its serv
 As well as files can send using scp.  
 If you will use `gossm` tool, this mean there will no need to open inbound 22 port in your ec2 server when is using ssh or scp command.  
 Because AWS Systems Manger Session Manager is using ssh protocol tunneling.   
-     
+<br/>
+**Additionally Features**
+- `cmd` command has added. this command is executing a command on selected multiple servers, waiting for a response on its result. (**run command**)
+
 ## Prerequisite 
 - [required] Your ec2 servers in aws are installed [aws ssm agent](https://docs.aws.amazon.com/systems-manager/latest/userguide/ssm-agent.html).
 EC2 severs have to apply **AmazonEC2RoleforSSM** iam policy.     
@@ -35,13 +38,13 @@ $ brew tap gjbae1212/gossm
 $ brew install gossm
 
 # mac
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.0.3/gossm_1.0.3_Darwin_x86_64.tar.gz
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.0.4/gossm_1.0.4_Darwin_x86_64.tar.gz
 
 # linux
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.0.3/gossm_1.0.3_Linux_x86_64.tar.gz
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.0.4/gossm_1.0.4_Linux_x86_64.tar.gz
 
 # window
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.0.3/gossm_1.0.3_Windows_x86_64.tar.gz
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.0.4/gossm_1.0.4_Windows_x86_64.tar.gz
 ```
 
 ## How to use
@@ -93,6 +96,14 @@ $ gossm scp -e '-i key.pem file user@server-domain:/home/blahblah'
 
 ```
 
+#### cmd 
+`-e` required args, it is a parameter for execute to command on selected servers.
+
+```bash
+# It is to execute a command("uptime") on selected multiple servers, waiting for a response on its result.
+$ gossm cmd -e "uptime" 
+```
+ 
 **ex)**  
 <p align="center">
 <img src="https://storage.googleapis.com/gjbae1212-asset/gossm/ssh.gif" width="500", height="450" />
