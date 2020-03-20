@@ -85,7 +85,7 @@ func initConfig() {
 
 	// check session-manager-plugin
 	configDir := filepath.Join(home, ".gossm")
-	pluginFpath := filepath.Join(configDir, plugin.GetPluginFileName())
+	pluginFPath := filepath.Join(configDir, plugin.GetPluginFileName())
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		err := os.MkdirAll(configDir, os.ModePerm)
 		if err != nil {
@@ -93,22 +93,35 @@ func initConfig() {
 			os.Exit(1)
 		}
 	}
+
 	// create session-manager-plugin
+	pluginData, err := plugin.GetPlugin()
+	if err != nil {
+		fmt.Println(Red(err))
+		os.Exit(1)
+	}
+
 	viper.Set("plugin", plugin.GetPluginFileName())
-	if _, err := os.Stat(pluginFpath); os.IsNotExist(err) {
-		bys, err := plugin.GetPlugin()
-		if err != nil {
-			fmt.Println(Yellow("using default session-manager-plugin"))
+	if info, err := os.Stat(pluginFPath); os.IsNotExist(err) {
+		if err := ioutil.WriteFile(pluginFPath, pluginData, 0755); err != nil {
+			fmt.Println(Yellow("[warning] using default session-manager-plugin"))
 		} else {
-			if err := ioutil.WriteFile(pluginFpath, bys, 0755); err != nil {
-				fmt.Println(Yellow("using default session-manager-plugin"))
-			}
-			viper.Set("plugin", pluginFpath)
+			fmt.Println(Green("[create] aws ssm plugin"))
+			viper.Set("plugin", pluginFPath)
 		}
-	} else if err == nil {
-		viper.Set("plugin", pluginFpath)
+	} else if err != nil {
+		fmt.Println(Yellow("[warning] using default session-manager-plugin"))
 	} else {
-		fmt.Println(Yellow("using default session-manager-plugin"))
+		if int(info.Size()) != len(pluginData) {
+			if err := ioutil.WriteFile(pluginFPath, pluginData, 0755); err != nil {
+				fmt.Println(Yellow("[warning] using default session-manager-plugin"))
+			} else {
+				fmt.Println(Green("[update] aws ssm plugin"))
+				viper.Set("plugin", pluginFPath)
+			}
+		} else {
+			viper.Set("plugin", pluginFPath)
+		}
 	}
 
 	// get credentials
