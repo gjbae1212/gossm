@@ -18,6 +18,10 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	gossmVersion = "1.1.0"
+)
+
 var (
 	// default aws session
 	awsSession *session.Session
@@ -59,6 +63,10 @@ func init() {
 [optional] if you are having multiple aws profiles, it is one of profiles (default is AWS_PROFILE environment variable or default)`)
 	rootCmd.PersistentFlags().StringP("region", "r", "", `[optional] it is region in AWS that would like to do something`)
 	rootCmd.PersistentFlags().StringP("target", "t", "", "[optional] it is instanceId of server in AWS that would like to something")
+
+	// set version flag
+	rootCmd.Version = gossmVersion
+	rootCmd.InitDefaultVersionFlag()
 
 	// mapping viper
 	viper.BindPFlag("target", rootCmd.PersistentFlags().Lookup("target"))
