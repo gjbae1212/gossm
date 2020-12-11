@@ -180,13 +180,12 @@ func setTarget() error {
 		viper.Set("target", target)
 		viper.Set("domain", domain)
 	} else {
+		viper.Set("target", target)
 		domain, err = findDomainByInstanceId(region, target)
 		if err != nil {
 			return err
 		}
-		if domain == "" {
-			return fmt.Errorf("[err] don't exist running instances \n")
-		}
+
 		viper.Set("domain", domain)
 	}
 
@@ -238,6 +237,11 @@ func setSSHWithCLI() error {
 	if err := setTarget(); err != nil {
 		return err
 	}
+	//verify that domain has been set
+	if viper.Get("domain") == nil {
+		return fmt.Errorf("[err] don't exist running instances \n")
+	}
+
 	if err := setUser(); err != nil {
 		return err
 	}
