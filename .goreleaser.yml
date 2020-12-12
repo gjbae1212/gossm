@@ -16,6 +16,12 @@ builds:
       - linux
     goarch:
       - amd64
+    asmflags:
+      - all=-trimpath={{.Env.GOPATH}}
+    gcflags:
+      - all=-trimpath={{.Env.GOPATH}}
+    ldflags:
+      - -s -w
 archives:
   - replacements:
       darwin: Darwin
