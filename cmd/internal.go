@@ -515,14 +515,17 @@ func findInstanceIdByIp(region, ip string) (string, error) {
 
 func findManagedInstances(region string) ([]string, error) {
 	svc := ssm.New(awsSession, aws.NewConfig().WithRegion(region))
-	output, err := svc.DescribeInstanceInformation(nil)
-	if err != nil {
-		return nil, err
-	}
 
 	insts := []string{}
-	for _, inst := range output.InstanceInformationList {
-		insts = append(insts, aws.StringValue(inst.InstanceId))
+	err := svc.DescribeInstanceInformationPages(nil,
+	    func(page *ssm.DescribeInstanceInformationOutput, lastPage bool) bool {
+			for _, inst := range page.InstanceInformationList{
+				insts = append(insts, aws.StringValue(inst.InstanceId))
+			}
+			return true
+		})
+	if err != nil {
+		return nil, err
 	}
 
 	return insts, nil
