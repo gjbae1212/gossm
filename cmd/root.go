@@ -8,8 +8,6 @@ import (
 
 	"github.com/gjbae1212/gossm/plugin"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 
 	. "github.com/logrusorgru/aurora"
@@ -132,59 +130,17 @@ func initConfig() {
 		}
 	}
 
-	// get credentials
-	credFile, err := rootCmd.Flags().GetString("cred")
-	if err != nil {
-		fmt.Println(Red(err))
-		os.Exit(1)
-	}
-
-	// get profile
+	// set profile
 	profile := viper.GetString("profile")
-
-	// get session
-	awsSession, profile, err = makeSession(credFile, profile)
-	if err != nil {
-		fmt.Println(Red(err))
-		os.Exit(1)
+	if profile != "" {
+		os.Setenv("AWS_PROFILE", profile)
+	}
+	
+	// set region
+	region := viper.GetString("region")
+	if region != "" {
+		os.Setenv("AWS_REGION", region)
 	}
 
-	cred, err := awsSession.Config.Credentials.Get()
-	if err != nil {
-		fmt.Println(Red(fmt.Sprintf("[profile] %s", profile)))
-		fmt.Println(Red(err))
-		os.Exit(1)
-	}
-
-	// mapping viper
-	viper.Set("profile", profile)
-	viper.Set("accesskey", cred.AccessKeyID)
-	viper.Set("secretkey", cred.SecretAccessKey)
-	if viper.GetString("region") == "" {
-		viper.Set("region", *awsSession.Config.Region)
-	}
-	awsSession.Config.WithRegion(viper.GetString("region"))
-}
-
-func makeSession(credFile, profile string) (*session.Session, string, error) {
-	if profile == "" {
-		profile = "default"
-		if os.Getenv("AWS_PROFILE") != "" {
-			profile = os.Getenv("AWS_PROFILE")
-		}
-	}
-
-	// if cred args is exist.
-	if credFile != "" {
-		sess, err := session.NewSession(&aws.Config{
-			Credentials: credentials.NewSharedCredentials(credFile, profile)})
-		return sess, profile, err
-	}
-
-	// default cred
-	sess, err := session.NewSessionWithOptions(session.Options{
-		Profile:           profile,
-		SharedConfigState: session.SharedConfigEnable,
-	})
-	return sess, profile, err
+	awsSession = session.Must(session.NewSession())
 }
