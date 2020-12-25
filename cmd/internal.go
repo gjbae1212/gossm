@@ -513,11 +513,32 @@ func findInstanceIdByIp(region, ip string) (string, error) {
 	return "", nil
 }
 
+func findManagedInstances(region string) ([]string, error) {
+	svc := ssm.New(awsSession, aws.NewConfig().WithRegion(region))
+	output, err := svc.DescribeInstanceInformation(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	insts := []string{}
+	for _, inst := range output.InstanceInformationList {
+		insts = append(insts, aws.StringValue(inst.InstanceId))
+	}
+
+	return insts, nil
+}
+
 func findInstances(region string) (map[string][]string, error) {
 	svc := ec2.New(awsSession, aws.NewConfig().WithRegion(region))
+	insts, err := findManagedInstances(region)
+	if err != nil {
+		return nil, err
+	}
+
 	input := &ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{
 			{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}},
+			{Name: aws.String("instance-id"), Values: aws.StringSlice(insts)},
 		},
 	}
 	output, err := svc.DescribeInstances(input)
