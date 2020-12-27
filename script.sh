@@ -16,7 +16,18 @@ function build
 
 function release
 {
-   goreleaser release --rm-dist
+
+  tag=$1
+  if [ -z "$tag" ]
+  then
+     echo "not found tag name"
+     exit 1
+  fi
+
+  git tag -a $tag -m "Add $tag"
+  git push origin $tag
+
+  goreleaser release --rm-dist
 }
 
 CMD=$1
