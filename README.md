@@ -27,7 +27,7 @@ Because AWS Systems Manger Session Manager is using ssh protocol tunneling.
 EC2 severs have to apply **AmazonEC2RoleforSSM** iam policy.     
 If you would like to use ssh, scp command using gossm, aws ssm agent version **2.3.672.0 or later** is installed on ec2. 
 - [required] **aws access key**, **aws secret key**
-- [required] **ec2:DescribeInstances**, **ssm:StartSession permission**    
+- [required] **ec2:DescribeInstances**, **ssm:StartSession permission**, **ssm:DescribeInstanceInformation**     
 - [optional] It's better to possibly get to additional permission for **ec2:DescribeRegions**, **ssm:TerminateSession**
 
 ## Install
