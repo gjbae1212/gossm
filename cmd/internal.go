@@ -518,8 +518,8 @@ func findManagedInstances(region string) ([]string, error) {
 
 	insts := []string{}
 	err := svc.DescribeInstanceInformationPages(nil,
-	    func(page *ssm.DescribeInstanceInformationOutput, lastPage bool) bool {
-			for _, inst := range page.InstanceInformationList{
+		func(page *ssm.DescribeInstanceInformationOutput, lastPage bool) bool {
+			for _, inst := range page.InstanceInformationList {
 				insts = append(insts, aws.StringValue(inst.InstanceId))
 			}
 			return true
@@ -533,17 +533,18 @@ func findManagedInstances(region string) ([]string, error) {
 
 func findInstances(region string) (map[string][]string, error) {
 	svc := ec2.New(awsSession, aws.NewConfig().WithRegion(region))
-	insts, err := findManagedInstances(region)
-	if err != nil {
-		return nil, err
-	}
 
 	input := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}},
-			{Name: aws.String("instance-id"), Values: aws.StringSlice(insts)},
-		},
+		Filters: []*ec2.Filter{{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}}},
 	}
+
+	// get managed instances
+	insts, err := findManagedInstances(region)
+	if err != nil || len(insts) == 0 {
+	} else { // if instances exist.
+		input.Filters = append(input.Filters, &ec2.Filter{Name: aws.String("instance-id"), Values: aws.StringSlice(insts)})
+	}
+
 	output, err := svc.DescribeInstances(input)
 	if err != nil {
 		return nil, err
