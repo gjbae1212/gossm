@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 
 	. "github.com/logrusorgru/aurora"
@@ -186,8 +187,9 @@ func makeSession(credFile, profile string) (*session.Session, string, error) {
 
 	// default cred
 	sess, err := session.NewSessionWithOptions(session.Options{
-		Profile:           profile,
-		SharedConfigState: session.SharedConfigEnable,
+		Profile:                 profile,
+		SharedConfigState:       session.SharedConfigEnable,
+		AssumeRoleTokenProvider: stscreds.StdinTokenProvider,
 	})
 	return sess, profile, err
 }
