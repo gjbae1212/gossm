@@ -185,7 +185,14 @@ func makeSession(credFile, profile string) (*session.Session, string, error) {
 		return sess, profile, err
 	}
 
-	// default cred
+	// default creds
+	envPresent := os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != ""
+	if envPresent {
+		sess, err := session.NewSessionWithOptions(session.Options{
+			AssumeRoleTokenProvider: stscreds.StdinTokenProvider,
+		})
+		return sess, "env", err
+	}
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Profile:                 profile,
 		SharedConfigState:       session.SharedConfigEnable,

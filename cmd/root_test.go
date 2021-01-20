@@ -28,4 +28,11 @@ func TestMakeSession(t *testing.T) {
 	_, p, err = makeSession("", "")
 	assert.NoError(err)
 	assert.Equal("test-account", p)
+	os.Setenv("AWS_PROFILE", "")
+
+	os.Setenv("AWS_ACCESS_KEY_ID", "ABCDEFGHIJKLMNOP")
+	os.Setenv("AWS_SECRET_ACCESS_KEY", "abcdef123456")
+	_, p, err = makeSession("", "")
+	assert.NoError(err)
+	assert.Equal("env", p)
 }
