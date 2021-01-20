@@ -38,13 +38,13 @@ $ brew tap gjbae1212/gossm
 $ brew install gossm
 
 # mac
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.2.1/gossm_1.2.1_Darwin_x86_64.tar.gz
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.2.2/gossm_1.2.2_Darwin_x86_64.tar.gz
 
 # linux
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.2.1/gossm_1.2.1_Linux_x86_64.tar.gz
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.2.2/gossm_1.2.2_Linux_x86_64.tar.gz
 
 # window
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.2.1/gossm_1.2.1_Windows_x86_64.tar.gz
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.2.2/gossm_1.2.2_Windows_x86_64.tar.gz
 ```
 
 ## How to use
