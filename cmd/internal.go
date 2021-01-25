@@ -14,28 +14,117 @@ import (
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
-
-	"github.com/aws/aws-sdk-go/service/ssm"
-
-	"github.com/aws/aws-sdk-go/service/ec2"
-
 	"github.com/aws/aws-sdk-go/aws"
-	. "github.com/logrusorgru/aurora"
-	"github.com/spf13/viper"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/fatih/color"
 )
 
-// Set scp from interactive CLI and then its params set to viper
-func setSCP() error {
-	if viper.GetString("scp-exec") == "" {
-		return fmt.Errorf("[err] [required] exec argument")
+// setRegion set region to cred.
+func setRegion(c *Credential) error {
+	// if region don't exist, get region from prompt
+	var err error
+	if c.awsRegion == "" {
+		c.awsRegion, err = askRegion(c.awsSession)
+		if err != nil {
+			return err
+		}
 	}
 
-	if viper.GetString("region") == "" {
+	if c.awsRegion == "" {
+		return fmt.Errorf("[err] don't exist aws region")
+	}
+
+	return nil
+}
+
+// setTarget set target, domain to ssm.
+func setTarget(c *Credential, e *Executor) error {
+	if c.awsRegion == "" {
 		return fmt.Errorf("[err] don't exist region")
 	}
 
+	var err error
+	if e.target == "" {
+		if e.target, e.domain, err = askTarget(c.awsSession, c.awsRegion); err != nil {
+			return err
+		}
+	} else {
+		e.domain, err = findDomainByInstanceId(c.awsSession, c.awsRegion, e.target)
+		if err != nil {
+			return err
+		}
+		if e.domain == "" {
+			return fmt.Errorf("[err] don't exist running instances")
+		}
+	}
+	return nil
+}
+
+// setSSH set ssh command to ssm.
+func setSSH(c *Credential, e *Executor) error {
+	if c.awsRegion == "" {
+		return fmt.Errorf("[err] don't exist region")
+	}
+
+	if e.execCommand == "" {
+		return setSSHWithCLI(c, e)
+	} else {
+		e.execCommand = generateExecCommand(e.execCommand, e.sshKey, "", "")
+	}
+
 	// parse command
-	cmd := strings.TrimSpace(viper.GetString("scp-exec"))
+	cmd := strings.TrimSpace(e.execCommand)
+	seps := strings.Split(cmd, " ")
+	lastArg := seps[len(seps)-1]
+	lastArgSeps := strings.Split(lastArg, "@")
+	server := lastArgSeps[len(lastArgSeps)-1]
+	ips, err := net.LookupIP(server)
+	if err != nil {
+		color.Red("[err] Invalid exec command")
+		color.Yellow("[change] CLI mode")
+		return setSSHWithCLI(c, e)
+	}
+
+	// lookup domain
+	serverIP := ""
+	for _, ip := range ips {
+		if ip.To4() != nil {
+			serverIP = ip.String()
+			break
+		}
+	}
+	if serverIP == "" {
+		color.Red("[err] Invalid domain name")
+		color.Yellow("[change] CLI mode")
+		return setSSHWithCLI(c, e)
+	}
+
+	// find instanceId By ip
+	instanceId, err := findInstanceIdByIp(c.awsSession, c.awsRegion, serverIP)
+	if err != nil {
+		return err
+	}
+	if instanceId == "" {
+		return fmt.Errorf("[err] not found matching server in your AWS.")
+	}
+	e.target = instanceId
+	return nil
+}
+
+// setSCP set scp command to ssm.
+func setSCP(c *Credential, e *Executor) error {
+	if c.awsRegion == "" {
+		return fmt.Errorf("[err] don't exist region")
+	}
+
+	if e.execCommand == "" {
+		return fmt.Errorf("[err] [required] exec argument")
+	}
+
+	// parse command
+	cmd := e.execCommand
 	seps := strings.Split(cmd, " ")
 	if len(seps) < 2 {
 		return fmt.Errorf("[err] invalid exec argument")
@@ -43,7 +132,6 @@ func setSCP() error {
 
 	dst := seps[len(seps)-1]
 	dstSeps := strings.Split(strings.Split(dst, ":")[0], "@")
-
 	seps = strings.Split(strings.TrimSpace(strings.Join(seps[0:(len(seps)-1)], " ")), " ")
 
 	src := seps[len(seps)-1]
@@ -77,198 +165,77 @@ func setSCP() error {
 	}
 
 	// find instanceId By ip
-	instanceId, err := findInstanceIdByIp(viper.GetString("region"), serverIP)
+	instanceId, err := findInstanceIdByIp(c.awsSession, c.awsRegion, serverIP)
 	if err != nil {
 		return err
 	}
 	if instanceId == "" {
 		return fmt.Errorf("[err] not found your server")
 	}
-
-	viper.Set("target", instanceId)
+	e.target = instanceId
 	return nil
 }
 
-// Set ssh  from interactive CLI and then its params set to viper
-func setSSH() error {
-	if viper.GetString("region") == "" {
-		return fmt.Errorf("[err] don't exist region")
-	}
-
-	if viper.GetString("ssh-exec") == "" {
-		return setSSHWithCLI()
-	} else {
-		exec := generateExecCommand(viper.GetString("ssh-exec"),
-			viper.GetString("ssh-identity"), "", "")
-		viper.Set("ssh-exec", exec)
-	}
-
-	// parse command
-	cmd := strings.TrimSpace(viper.GetString("ssh-exec"))
-	seps := strings.Split(cmd, " ")
-	lastArg := seps[len(seps)-1]
-	lastArgSeps := strings.Split(lastArg, "@")
-	server := lastArgSeps[len(lastArgSeps)-1]
-	ips, err := net.LookupIP(server)
-	if err != nil {
-		fmt.Printf("%s\n\n", Red("[err] Invalid exec command"))
-		fmt.Printf("%s\n\n", Yellow("[changing] CLI mode"))
-		return setSSHWithCLI()
-	}
-
-	// lookup domain
-	serverIP := ""
-	for _, ip := range ips {
-		if ip.To4() != nil {
-			serverIP = ip.String()
-			break
-		}
-	}
-	if serverIP == "" {
-		fmt.Printf("%s\n\n", Red("[err] Invalid domain name"))
-		fmt.Printf("%s\n\n", Yellow("[changing] CLI mode"))
-		return setSSHWithCLI()
-	}
-
-	// find instanceId By ip
-	instanceId, err := findInstanceIdByIp(viper.GetString("region"), serverIP)
-	if err != nil {
-		return err
-	}
-	if instanceId == "" {
-		return fmt.Errorf("[err] not found matching server in your AWS.")
-	}
-	viper.Set("target", instanceId)
-	return nil
-}
-
-// Set region from interactive CLI and then its params set to viper
-func setRegion() error {
-	// if region don't exist, get region from prompt
-	var err error
-	var region = viper.GetString("region")
-	if region == "" {
-		region, err = askRegion()
-		if err != nil {
-			return err
-		}
-		viper.Set("region", region)
-	}
-
-	if region == "" {
+// setMultiTarget set targets to ssm.
+func setMultiTarget(c *Credential, s *Executor) error {
+	if c.awsRegion == "" {
 		return fmt.Errorf("[err] don't exist region \n")
 	}
 
-	return nil
-}
-
-// Set target from interactive CLI and then its params set to viper
-func setTarget() error {
-	region := viper.GetString("region")
-	if region == "" {
-		return fmt.Errorf("[err] don't exist region \n")
-	}
-
-	var err error
-	target := viper.GetString("target")
-	domain := ""
-	if target == "" {
-		target, domain, err = askTarget(region)
+	if s.target == "" {
+		targets, domains, err := askMultiTarget(c.awsSession, c.awsRegion)
 		if err != nil {
 			return err
 		}
-		viper.Set("target", target)
-		viper.Set("domain", domain)
+		s.multiTarget = targets
+		s.multiDomain = domains
 	} else {
-		viper.Set("target", target)
-		domain, err = findDomainByInstanceId(region, target)
-		if err != nil {
-			return err
-		}
-
-		viper.Set("domain", domain)
-	}
-
-	return nil
-}
-
-// Set targets from interactive CLI and then its params set to viper
-func setMultiTarget() error {
-	region := viper.GetString("region")
-	if region == "" {
-		return fmt.Errorf("[err] don't exist region \n")
-	}
-
-	target := viper.GetString("target")
-	if target == "" {
-		targets, domains, err := askMultiTarget(region)
-		if err != nil {
-			return err
-		}
-		viper.Set("targets", targets)
-		viper.Set("domains", domains)
-	} else {
-		domain, err := findDomainByInstanceId(region, target)
+		domain, err := findDomainByInstanceId(c.awsSession, c.awsRegion, s.target)
 		if err != nil {
 			return err
 		}
 		if domain == "" {
 			return fmt.Errorf("[err] don't exist running instances \n")
 		}
-		viper.Set("targets", []string{target})
-		viper.Set("domains", []string{domain})
-	}
 
+		s.multiTarget = []string{s.target}
+		s.multiDomain = []string{domain}
+	}
 	return nil
 }
 
-// Set user from interactive CLI and then its params set to viper
-func setUser() error {
+func setSSHWithCLI(c *Credential, e *Executor) error {
+	e.execCommand = ""
+	if err := setTarget(c, e); err != nil {
+		return err
+	}
+
 	user, err := askUser()
 	if err != nil {
 		return err
 	}
-	viper.Set("user", user)
-	return nil
-}
+	e.user = user
 
-func setSSHWithCLI() error {
-	viper.Set("ssh-exec", "")
-	if err := setTarget(); err != nil {
-		return err
-	}
-	//verify that domain has been set
-	if viper.Get("domain") == nil {
-		return fmt.Errorf("[err] don't exist running instances \n")
-	}
-
-	if err := setUser(); err != nil {
-		return err
-	}
-	exec := generateExecCommand("",
-		viper.GetString("ssh-identity"),
-		viper.GetString("user"),
-		viper.GetString("domain"))
-	viper.Set("ssh-exec", exec)
+	e.execCommand = generateExecCommand("", e.sshKey, e.user, e.domain)
 	return nil
 }
 
 // interactive CLI
 func askUser() (user string, err error) {
 	prompt := &survey.Input{
-		Message: "Type your connect user (default: root):",
+		Message: "Type your connect ssh user (default: deploy):",
 	}
 	survey.AskOne(prompt, &user)
 	user = strings.TrimSpace(user)
 	if user == "" {
-		user = "root"
+		user = "deploy"
 	}
 	return
 }
 
-func askRegion() (region string, err error) {
+func askRegion(sess *session.Session) (region string, err error) {
 	var regions []string
-	svc := ec2.New(awsSession, aws.NewConfig().WithRegion("us-east-1"))
+	svc := ec2.New(sess, aws.NewConfig().WithRegion("us-east-1"))
 	desc, err := svc.DescribeRegions(nil)
 	if err != nil {
 		regions = make([]string, len(defaultRegions))
@@ -295,8 +262,8 @@ func askRegion() (region string, err error) {
 	return
 }
 
-func askTarget(region string) (target, domain string, err error) {
-	table, suberr := findInstances(region)
+func askTarget(sess *session.Session, region string) (target, domain string, err error) {
+	table, suberr := findInstances(sess, region)
 	if suberr != nil {
 		err = suberr
 		return
@@ -329,8 +296,8 @@ func askTarget(region string) (target, domain string, err error) {
 	return
 }
 
-func askMultiTarget(region string) (targets, domains []string, err error) {
-	table, suberr := findInstances(region)
+func askMultiTarget(sess *session.Session, region string) (targets, domains []string, err error) {
+	table, suberr := findInstances(sess, region)
 	if suberr != nil {
 		err = suberr
 		return
@@ -364,6 +331,110 @@ func askMultiTarget(region string) (targets, domains []string, err error) {
 	return
 }
 
+// findInstances finds instances.
+func findInstances(sess *session.Session, region string) (map[string][]string, error) {
+	svc := ec2.New(sess, aws.NewConfig().WithRegion(region))
+
+	input := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}}},
+	}
+
+	// get managed instances
+	insts, err := findManagedInstances(sess, region)
+	if err != nil || len(insts) == 0 {
+	} else { // if instances exist.
+		input.Filters = append(input.Filters, &ec2.Filter{Name: aws.String("instance-id"), Values: aws.StringSlice(insts)})
+	}
+
+	output, err := svc.DescribeInstances(input)
+	if err != nil {
+		return nil, err
+	}
+
+	table := make(map[string][]string)
+	for _, rv := range output.Reservations {
+		for _, inst := range rv.Instances {
+			name := ""
+			for _, tag := range inst.Tags {
+				if *tag.Key == "Name" {
+					name = *tag.Value
+					break
+				}
+			}
+
+			table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = []string{*inst.InstanceId, *inst.PublicDnsName}
+		}
+	}
+	return table, nil
+}
+
+// findManagedInstances finds instance list which is possibly connected through ssm agent.
+func findManagedInstances(sess *session.Session, region string) ([]string, error) {
+	svc := ssm.New(sess, aws.NewConfig().WithRegion(region))
+	var insts []string
+	err := svc.DescribeInstanceInformationPages(nil,
+		func(page *ssm.DescribeInstanceInformationOutput, lastPage bool) bool {
+			for _, inst := range page.InstanceInformationList {
+				insts = append(insts, aws.StringValue(inst.InstanceId))
+			}
+			return true
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return insts, nil
+}
+
+// findInstanceIdByIp finds instanceId by ip.
+func findInstanceIdByIp(sess *session.Session, region, ip string) (string, error) {
+	svc := ec2.New(sess, aws.NewConfig().WithRegion(region))
+	input := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}},
+		},
+	}
+
+	output, err := svc.DescribeInstances(input)
+	if err != nil {
+		return "", err
+	}
+	for _, rv := range output.Reservations {
+		for _, inst := range rv.Instances {
+			if inst.PublicIpAddress == nil || inst.PrivateIpAddress == nil {
+				continue
+			}
+			if ip == *inst.PublicIpAddress || ip == *inst.PrivateIpAddress {
+				return *inst.InstanceId, nil
+			}
+		}
+	}
+	return "", nil
+}
+
+// findDomainByInstanceId finds domain by instanceId.
+func findDomainByInstanceId(sess *session.Session, region string, instanceId string) (string, error) {
+	svc := ec2.New(sess, aws.NewConfig().WithRegion(region))
+	input := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}},
+		},
+	}
+
+	output, err := svc.DescribeInstances(input)
+	if err != nil {
+		return "", err
+	}
+	for _, rv := range output.Reservations {
+		for _, inst := range rv.Instances {
+			if *inst.InstanceId == instanceId {
+				return *inst.PublicDnsName, nil
+			}
+		}
+	}
+	return "", nil
+}
+
 // Call command
 func callSubprocess(process string, args ...string) error {
 	call := exec.Command(process, args...)
@@ -393,18 +464,35 @@ func callSubprocess(process string, args ...string) error {
 	return nil
 }
 
-// Print start command
-func printReady(cmd string) {
-	profile := viper.GetString("profile")
-	region := viper.GetString("region")
-	target := viper.GetString("target")
-	fmt.Printf("[%s] profile: %s, region: %s, target: %s\n", Green(cmd), Yellow(profile),
-		Yellow(region), Yellow(target))
+// Create start session
+func createStartSession(c *Credential, input *ssm.StartSessionInput) (*ssm.StartSessionOutput, string, error) {
+	svc := ssm.New(c.awsSession, aws.NewConfig().WithRegion(c.awsRegion))
+	subctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
+
+	sess, err := svc.StartSessionWithContext(subctx, input)
+	if err != nil {
+		return nil, "", err
+	}
+	return sess, svc.Endpoint, nil
+}
+
+// Delete start session
+func deleteStartSession(c *Credential, sessionId string) error {
+	svc := ssm.New(c.awsSession, aws.NewConfig().WithRegion(c.awsRegion))
+	fmt.Printf("%s %s \n", color.YellowString("Delete Session"), color.YellowString(sessionId))
+	subctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	if _, err := svc.TerminateSessionWithContext(subctx, &ssm.TerminateSessionInput{SessionId: &sessionId}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // sendCommand is to request aws ssm to run command.
-func sendCommand(region string, targets []string, command string) (*ssm.SendCommandOutput, error) {
-	svc := ssm.New(awsSession, aws.NewConfig().WithRegion(region))
+func sendCommand(sess *session.Session, region string, targets []string, command string) (*ssm.SendCommandOutput, error) {
+	svc := ssm.New(sess, aws.NewConfig().WithRegion(region))
 
 	// only support to linux (window = "AWS-RunPowerShellScript")
 	docName := "AWS-RunShellScript"
@@ -427,8 +515,8 @@ func sendCommand(region string, targets []string, command string) (*ssm.SendComm
 }
 
 // printCommandInvocation prints result for sendCommand.
-func printCommandInvocation(region string, inputs []*ssm.GetCommandInvocationInput) {
-	svc := ssm.New(awsSession, aws.NewConfig().WithRegion(region))
+func printCommandInvocation(sess *session.Session, region string, inputs []*ssm.GetCommandInvocationInput) {
+	svc := ssm.New(sess, aws.NewConfig().WithRegion(region))
 	wg := new(sync.WaitGroup)
 
 	for _, input := range inputs {
@@ -442,17 +530,17 @@ func printCommandInvocation(region string, inputs []*ssm.GetCommandInvocationInp
 				case <-time.After(1 * time.Second):
 					output, err := svc.GetCommandInvocationWithContext(subctx, input)
 					if err != nil {
-						fmt.Println(Red(err))
+						color.Red("%v", err)
 						break Exit
 					}
 					status := strings.ToLower(*output.Status)
 					switch status {
 					case "pending", "inprogress", "delayed":
 					case "success":
-						fmt.Printf("[%s] %s\n", Yellow(*output.InstanceId), Green(*output.StandardOutputContent))
+						fmt.Printf("[%s][%s] %s\n", color.GreenString("success"), color.YellowString(*output.InstanceId), color.GreenString(*output.StandardOutputContent))
 						break Exit
 					default:
-						fmt.Printf("[%s] %s\n", Yellow(*output.InstanceId), Red(*output.StandardErrorContent))
+						fmt.Printf("[%s][%s] %s\n", color.RedString("err"), color.YellowString(*output.InstanceId), color.RedString(*output.StandardErrorContent))
 						break Exit
 					}
 				}
@@ -462,131 +550,6 @@ func printCommandInvocation(region string, inputs []*ssm.GetCommandInvocationInp
 	}
 
 	wg.Wait()
-}
-
-// Create start session
-func createStartSession(region string, input *ssm.StartSessionInput) (*ssm.StartSessionOutput, string, error) {
-	svc := ssm.New(awsSession, aws.NewConfig().WithRegion(region))
-	subctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-	defer cancel()
-
-	sess, err := svc.StartSessionWithContext(subctx, input)
-	if err != nil {
-		return nil, "", err
-	}
-	return sess, svc.Endpoint, nil
-}
-
-// Delete start session
-func deleteStartSession(region, sessionId string) error {
-	svc := ssm.New(awsSession, aws.NewConfig().WithRegion(region))
-	fmt.Printf("%s %s \n", Yellow("Delete Session"), Yellow(sessionId))
-	subctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	if _, err := svc.TerminateSessionWithContext(subctx, &ssm.TerminateSessionInput{SessionId: &sessionId}); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Find IP
-func findInstanceIdByIp(region, ip string) (string, error) {
-	svc := ec2.New(awsSession, aws.NewConfig().WithRegion(region))
-	input := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}},
-		},
-	}
-
-	output, err := svc.DescribeInstances(input)
-	if err != nil {
-		return "", err
-	}
-	for _, rv := range output.Reservations {
-		for _, inst := range rv.Instances {
-			if ip == *inst.PublicIpAddress || ip == *inst.PrivateIpAddress {
-				return *inst.InstanceId, nil
-			}
-		}
-	}
-	return "", nil
-}
-
-func findManagedInstances(region string) ([]string, error) {
-	svc := ssm.New(awsSession, aws.NewConfig().WithRegion(region))
-
-	insts := []string{}
-	err := svc.DescribeInstanceInformationPages(nil,
-		func(page *ssm.DescribeInstanceInformationOutput, lastPage bool) bool {
-			for _, inst := range page.InstanceInformationList {
-				insts = append(insts, aws.StringValue(inst.InstanceId))
-			}
-			return true
-		})
-	if err != nil {
-		return nil, err
-	}
-
-	return insts, nil
-}
-
-func findInstances(region string) (map[string][]string, error) {
-	svc := ec2.New(awsSession, aws.NewConfig().WithRegion(region))
-
-	input := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}}},
-	}
-
-	// get managed instances
-	insts, err := findManagedInstances(region)
-	if err != nil || len(insts) == 0 {
-	} else { // if instances exist.
-		input.Filters = append(input.Filters, &ec2.Filter{Name: aws.String("instance-id"), Values: aws.StringSlice(insts)})
-	}
-
-	output, err := svc.DescribeInstances(input)
-	if err != nil {
-		return nil, err
-	}
-
-	table := make(map[string][]string)
-	for _, rv := range output.Reservations {
-		for _, inst := range rv.Instances {
-			name := ""
-			for _, tag := range inst.Tags {
-				if *tag.Key == "Name" {
-					name = *tag.Value
-					break
-				}
-			}
-
-			table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = []string{*inst.InstanceId, *inst.PublicDnsName}
-		}
-	}
-	return table, nil
-}
-
-func findDomainByInstanceId(region string, instanceId string) (string, error) {
-	svc := ec2.New(awsSession, aws.NewConfig().WithRegion(region))
-	input := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}},
-		},
-	}
-
-	output, err := svc.DescribeInstances(input)
-	if err != nil {
-		return "", err
-	}
-	for _, rv := range output.Reservations {
-		for _, inst := range rv.Instances {
-			if *inst.InstanceId == instanceId {
-				return *inst.PublicDnsName, nil
-			}
-		}
-	}
-	return "", nil
 }
 
 // Generate ssh-exec
@@ -611,4 +574,10 @@ func generateExecCommand(exec, identity, user, domain string) (newExec string) {
 	}
 
 	return
+}
+
+// Print start command
+func printReady(cmd string, c *Credential, e *Executor) {
+	fmt.Printf("[%s] profile: %s, region: %s, target: %s\n", color.GreenString(cmd), color.YellowString(c.awsProfile),
+		color.YellowString(c.awsRegion), color.YellowString(e.target))
 }

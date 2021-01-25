@@ -2,57 +2,49 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"time"
+
+	"github.com/fatih/color"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ssm"
-	"github.com/spf13/viper"
-
-	. "github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
-	// runCommand is a AWS Systems Manager Run Command.
-	runCommand = &cobra.Command{
+	// cmdCommand is a AWS Systems Manager Run Command.
+	cmdCommand = &cobra.Command{
 		Use:   "cmd",
 		Short: "Exec `run command` under AWS SSM with interactive CLI",
 		Long:  "Exec `run command` under AWS SSM with interactive CLI",
 		PreRun: func(cmd *cobra.Command, args []string) {
-			// check exec parameter
-			if viper.GetString("run-exec") == "" {
-				fmt.Println(Red("[err] [required] exec argument"))
-				os.Exit(1)
-			}
+			initCredential()
+			executor.execCommand = viper.GetString("cmd-exec")
+
 			// set region
-			if err := setRegion(); err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+			if err := setRegion(credential); err != nil {
+				panicRed(err)
 			}
 
 			// set multi target
-			if err := setMultiTarget(); err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+			if err := setMultiTarget(credential, executor); err != nil {
+				panicRed(err)
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			region := viper.GetString("region")
-			targets := viper.GetStringSlice("targets")
-			exec := viper.GetString("run-exec")
-
 			// send command
-			cmdOutput, err := sendCommand(region, targets, exec)
+			cmdOutput, err := sendCommand(credential.awsSession, credential.awsRegion, executor.multiTarget, executor.execCommand)
 			if err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+				panicRed(err)
 			}
 
 			commandId := *cmdOutput.Command.CommandId
 			instanceIds := aws.StringValueSlice(cmdOutput.Command.InstanceIds)
-			fmt.Printf("command: %s, commandId: %s, targets: %v\n", Green(exec), Green(commandId), Green(instanceIds))
-			fmt.Printf("%s\n", Yellow("Waiting Response ..."))
+			fmt.Printf("command: %s, commandId: %s, targets: %s\n",
+				color.GreenString(executor.execCommand), color.GreenString(commandId),
+				color.GreenString(fmt.Sprintf("%v", instanceIds)))
+			fmt.Printf("%s\n", color.YellowString("Waiting Response ..."))
 
 			// wait 3 seconds
 			time.Sleep(time.Second * 3)
@@ -65,17 +57,13 @@ var (
 					InstanceId: inst,
 				})
 			}
-			printCommandInvocation(region, inputs)
+			printCommandInvocation(credential.awsSession, credential.awsRegion, inputs)
 		},
 	}
 )
 
 func init() {
-	// add sub command
-	runCommand.Flags().StringP("exec", "e", "", "[required] run command")
-
-	// mapping viper
-	viper.BindPFlag("run-exec", runCommand.Flags().Lookup("exec"))
-
-	rootCmd.AddCommand(runCommand)
+	cmdCommand.Flags().StringP("exec", "e", "", "[required] execute command")
+	viper.BindPFlag("cmd-exec", cmdCommand.Flags().Lookup("exec"))
+	rootCmd.AddCommand(cmdCommand)
 }

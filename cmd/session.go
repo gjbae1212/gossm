@@ -2,11 +2,9 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
 
 	"github.com/aws/aws-sdk-go/service/ssm"
-	. "github.com/logrusorgru/aurora"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -17,54 +15,47 @@ var (
 		Short: "Exec `start-session` under AWS SSM with interactive CLI",
 		Long:  "Exec `start-session` under AWS SSM with interactive CLI",
 		PreRun: func(cmd *cobra.Command, args []string) {
+			initCredential()
+
 			// set region
-			if err := setRegion(); err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+			if err := setRegion(credential); err != nil {
+				panicRed(err)
 			}
 
 			// set target
-			if err := setTarget(); err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+			if err := setTarget(credential, executor); err != nil {
+				panicRed(err)
 			}
-			printReady("start-session")
+
+			printReady("start-session", credential, executor)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			region := viper.GetString("region")
-			profile := viper.GetString("profile")
-			target := viper.GetString("target")
-			input := &ssm.StartSessionInput{Target: &target}
+			input := &ssm.StartSessionInput{Target: &executor.target}
 
 			// create session
-			sess, endpoint, err := createStartSession(region, input)
+			sess, endpoint, err := createStartSession(credential, input)
 			if err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+				panicRed(err)
 			}
 
 			sessJson, err := json.Marshal(sess)
 			if err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+				panicRed(err)
 			}
 
 			paramsJson, err := json.Marshal(input)
 			if err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+				panicRed(err)
 			}
 
 			// call session-manager-plugin
-			plug := viper.GetString("plugin")
-			if err := callSubprocess(plug, string(sessJson),
-				region, "StartSession", profile, string(paramsJson), endpoint); err != nil {
-				fmt.Println(Red(err))
-				// delete Session
-				if err := deleteStartSession(region, *sess.SessionId); err != nil {
-					fmt.Println(Red(err))
-				}
-				os.Exit(1)
+			if err := callSubprocess(viper.GetString("plugin"), string(sessJson),
+				credential.awsRegion, "StartSession", credential.awsProfile, string(paramsJson), endpoint); err != nil {
+				color.Red("%v", err)
+			}
+			// delete Session
+			if err := deleteStartSession(credential, *sess.SessionId); err != nil {
+				color.Red("%v", err)
 			}
 		},
 	}

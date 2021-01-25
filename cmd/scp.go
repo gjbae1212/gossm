@@ -3,11 +3,10 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/service/ssm"
-	. "github.com/logrusorgru/aurora"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -18,81 +17,67 @@ var (
 		Short: "Exec `scp` under AWS SSM with interactive CLI",
 		Long:  "Exec `scp` under AWS SSM with interactive CLI",
 		PreRun: func(cmd *cobra.Command, args []string) {
+			initCredential()
+			executor.execCommand = viper.GetString("scp-exec")
 			// set region
-			if err := setRegion(); err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+			if err := setRegion(credential); err != nil {
+				panicRed(err)
+			}
+			// set scp
+			if err := setSCP(credential, executor); err != nil {
+				panicRed(err)
 			}
 
-			// set ssh
-			if err := setSCP(); err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
-			}
-
-			printReady("scp")
-			fmt.Printf("%s\n", Green("scp "+viper.GetString("scp-exec")))
+			printReady("scp", credential, executor)
+			color.Cyan("scp " + executor.execCommand)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			exec := viper.GetString("scp-exec")
-			region := viper.GetString("region")
-			profile := viper.GetString("profile")
-			target := viper.GetString("target")
 			docName := "AWS-StartSSHSession"
 			port := "22"
 			input := &ssm.StartSessionInput{
 				DocumentName: &docName,
 				Parameters:   map[string][]*string{"portNumber": []*string{&port}},
-				Target:       &target,
+				Target:       &executor.target,
 			}
 
 			// create session
-			sess, endpoint, err := createStartSession(region, input)
+			sess, endpoint, err := createStartSession(credential, input)
 			if err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+				panicRed(err)
 			}
 
 			sessJson, err := json.Marshal(sess)
 			if err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+				panicRed(err)
 			}
 
 			paramsJson, err := json.Marshal(input)
 			if err != nil {
-				fmt.Println(Red(err))
-				os.Exit(1)
+				panicRed(err)
 			}
 
-			// call ssh
-			plug := viper.Get("plugin")
+			// call scp
 			proxy := fmt.Sprintf("ProxyCommand=%s '%s' %s %s %s '%s' %s",
-				plug, string(sessJson), region, "StartSession", profile, string(paramsJson), endpoint)
+				viper.GetString("plugin"), string(sessJson), credential.awsRegion, "StartSession", credential.awsProfile, string(paramsJson), endpoint)
 			scpArgs := []string{"-o", proxy}
-			for _, sep := range strings.Split(exec, " ") {
+			for _, sep := range strings.Split(executor.execCommand, " ") {
 				if sep != "" {
 					scpArgs = append(scpArgs, sep)
 				}
 			}
 			if err := callSubprocess("scp", scpArgs...); err != nil {
-				fmt.Println(Red(err))
-				// delete Session
-				if err := deleteStartSession(region, *sess.SessionId); err != nil {
-					fmt.Println(Red(err))
-				}
-				os.Exit(1)
+				color.Red("%v", err)
+			}
+			// delete Session
+			if err := deleteStartSession(credential, *sess.SessionId); err != nil {
+				color.Red("%v", err)
 			}
 		},
 	}
 )
 
 func init() {
-	// add sub command
 	scpCommand.Flags().StringP("exec", "e", "", "[required] scp $exec, ex) \"-i ex.pem ubuntu@server:/home/ex.txt ex.txt\"")
-
-	// mapping viper
 	viper.BindPFlag("scp-exec", scpCommand.Flags().Lookup("exec"))
-
 	rootCmd.AddCommand(scpCommand)
 }
