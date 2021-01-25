@@ -114,7 +114,7 @@ $ gossm cmd -e "uptime"
 </p>
 
 #### mfa
-`-deadline` it's to set expire time for temporary credentials. **default** is 6 hours.
+`-deadline` it's to set expire time for temporary credentials. **default** is 6 hours.  
 `-device` it's to set mfa device. **default** is your virtual mfa device.
 ```bash
 $ gossm mfa <your-mfa-code>
