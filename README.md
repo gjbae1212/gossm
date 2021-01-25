@@ -20,8 +20,11 @@ If you will use `gossm` tool, this mean there will no need to open inbound 22 po
 Because AWS Systems Manger Session Manager is using ssh protocol tunneling.   
 <br/>
 **Additionally Features**
-- `cmd` command has added. this command is executing a command on selected multiple servers, waiting for a response on its result. (**run command**)
-
+- `mfa` command has added. this command is to authenticate through AWS MFA, and then to save issued a temporary credentials in $HOME/.aws/credentials_mfa. (default expired time is after 6 hours)  
+You should export global environment, such as `export AWS_SHARED_CREDENTIALS_FILE=$HOME/.aws/credentials_mfa`.    
+With completed, you can execute aws cli and gossm conveniently without mfa authenticated.    
+Refer to detail information below.
+   
 ## Prerequisite 
 - [required] Your ec2 servers in aws are installed [aws ssm agent](https://docs.aws.amazon.com/systems-manager/latest/userguide/ssm-agent.html).
 EC2 severs have to apply **AmazonEC2RoleforSSM** iam policy.     
@@ -38,13 +41,13 @@ $ brew tap gjbae1212/gossm
 $ brew install gossm
 
 # mac
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.2.3/gossm_1.2.3_Darwin_x86_64.tar.gz
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.3.0/gossm_1.3.0_Darwin_x86_64.tar.gz
 
 # linux
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.2.3/gossm_1.2.3_Linux_x86_64.tar.gz
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.3.0/gossm_1.3.0_Linux_x86_64.tar.gz
 
 # window
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.2.3/gossm_1.2.3_Windows_x86_64.tar.gz
+$ wget https://github.com/gjbae1212/gossm/releases/download/v1.3.0/gossm_1.3.0_Windows_x86_64.tar.gz
 ```
 
 ## How to use
@@ -67,6 +70,7 @@ aws_secret_access_key = AWS SECRET KEY
 `-r` or `-t` don't pass args, it can select through interactive CLI.  
     
 ### command
+
 #### start
 ```bash
 $ gossm start 
@@ -107,8 +111,20 @@ $ gossm cmd -e "uptime"
 **ex)**  
 <p align="center">
 <img src="https://storage.googleapis.com/gjbae1212-asset/gossm/ssh.gif" width="500", height="450" />
-</p> 
+</p>
 
+#### mfa
+`-deadline` it's to set expire time for temporary credentials. **default** is 6 hours.
+`-device` it's to set mfa device. **default** is your virtual mfa device.
+```bash
+$ gossm mfa <your-mfa-code>
+```
+**Must set to `export AWS_SHARED_CREDENTIALS_FILE=$HOME/.aws/credentials_mfa` in .bash_profile, .zshrc.**
 
+**ex)**  
+<p align="center">
+<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/mfa.png" />
+</p>
+ 
 ## LICENSE
 This project is following The MIT.
