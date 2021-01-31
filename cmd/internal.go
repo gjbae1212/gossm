@@ -335,11 +335,12 @@ func askMultiTarget(sess *session.Session, region string) (targets, domains []st
 func findInstances(sess *session.Session, region string) (map[string][]string, error) {
 	svc := ec2.New(sess, aws.NewConfig().WithRegion(region))
 
-	var ec2InstanceIds []string                    // used in the ec2.DescribeInstances call to filter results
+	var ec2InstanceIds []string                    // used in the DescribeInstances call to filter results
 	var nonEc2Instances []*ssm.InstanceInformation // used to display any non-EC2 managed instances
 
 	managedInstances, err := findManagedInstances(sess, region) // get all ssm connected instances
-	if err != nil || len(managedInstances) != 0 {
+	if err != nil || len(managedInstances) == 0 {
+	} else {
 		for _, i := range managedInstances {
 			if *i.PingStatus == "Online" { // check instance is connected to ssm
 				if *i.ResourceType != "EC2Instance" {
@@ -351,13 +352,14 @@ func findInstances(sess *session.Session, region string) (map[string][]string, e
 		}
 	}
 
+	// make a DescribeInstances call to get Tags for each EC2 instance.
+	// allows us to display the Name Tag in the askTarget prompt.
 	input := &ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{
 			{Name: aws.String("instance-id"), Values: aws.StringSlice(ec2InstanceIds)},
 			{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}},
 		},
 	}
-
 	output, err := svc.DescribeInstances(input)
 	if err != nil {
 		return nil, err
