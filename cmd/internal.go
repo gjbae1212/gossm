@@ -335,14 +335,21 @@ func askMultiTarget(sess *session.Session, region string) (targets, domains []st
 func findInstances(sess *session.Session, region string) (map[string][]string, error) {
 	svc := ec2.New(sess, aws.NewConfig().WithRegion(region))
 
-	var ec2InstanceIds []string                    // used in the DescribeInstances call to filter results
-	var nonEc2Instances []*ssm.InstanceInformation // used to display any non-EC2 managed instances
+	// Filter to return all running instances, guarantees results when user lacks the ssm:DescribeInstanceInformation permission
+	input := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}}},
+	}
 
-	managedInstances, err := findManagedInstances(sess, region) // get all ssm connected instances
+	var ec2InstanceIds []string
+	var nonEc2Instances []*ssm.InstanceInformation
+
+	// get all SSM connected instances
+	managedInstances, err := findManagedInstances(sess, region)
 	if err != nil || len(managedInstances) == 0 {
 	} else {
+		// sort results as EC2 or Non-EC2 instances
 		for _, i := range managedInstances {
-			if *i.PingStatus == "Online" { // check instance is connected to ssm
+			if *i.PingStatus == "Online" {
 				if *i.ResourceType != "EC2Instance" {
 					nonEc2Instances = append(nonEc2Instances, i)
 				} else {
@@ -350,16 +357,10 @@ func findInstances(sess *session.Session, region string) (map[string][]string, e
 				}
 			}
 		}
+		// Add ec2InstancesIds to our filter so we only get SSM connected instances from the DescribeInstances call
+		input.Filters = append(input.Filters, &ec2.Filter{Name: aws.String("instance-id"), Values: aws.StringSlice(ec2InstanceIds)})
 	}
 
-	// make a DescribeInstances call to get Tags for each EC2 instance.
-	// allows us to display the Name Tag in the askTarget prompt.
-	input := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			{Name: aws.String("instance-id"), Values: aws.StringSlice(ec2InstanceIds)},
-			{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}},
-		},
-	}
 	output, err := svc.DescribeInstances(input)
 	if err != nil {
 		return nil, err
