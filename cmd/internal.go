@@ -335,15 +335,30 @@ func askMultiTarget(sess *session.Session, region string) (targets, domains []st
 func findInstances(sess *session.Session, region string) (map[string][]string, error) {
 	svc := ec2.New(sess, aws.NewConfig().WithRegion(region))
 
+	// Filter to return all running instances, guarantees results when user lacks the ssm:DescribeInstanceInformation permission
 	input := &ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}}},
 	}
 
-	// get managed instances
-	insts, err := findManagedInstances(sess, region)
-	if err != nil || len(insts) == 0 {
-	} else { // if instances exist.
-		input.Filters = append(input.Filters, &ec2.Filter{Name: aws.String("instance-id"), Values: aws.StringSlice(insts)})
+	var ec2InstanceIds []string
+	var nonEc2Instances []*ssm.InstanceInformation
+
+	// get all SSM connected instances
+	managedInstances, err := findManagedInstances(sess, region)
+	if err != nil || len(managedInstances) == 0 {
+	} else {
+		// sort results as EC2 or Non-EC2 instances
+		for _, i := range managedInstances {
+			if *i.PingStatus == "Online" {
+				if *i.ResourceType != "EC2Instance" {
+					nonEc2Instances = append(nonEc2Instances, i)
+				} else {
+					ec2InstanceIds = append(ec2InstanceIds, *i.InstanceId)
+				}
+			}
+		}
+		// Add ec2InstancesIds to our filter so we only get SSM connected instances from the DescribeInstances call
+		input.Filters = append(input.Filters, &ec2.Filter{Name: aws.String("instance-id"), Values: aws.StringSlice(ec2InstanceIds)})
 	}
 
 	output, err := svc.DescribeInstances(input)
@@ -365,17 +380,20 @@ func findInstances(sess *session.Session, region string) (map[string][]string, e
 			table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = []string{*inst.InstanceId, *inst.PublicDnsName}
 		}
 	}
+	for _, mi := range nonEc2Instances {
+		table[fmt.Sprintf("%s\t(%s)", *mi.Name, *mi.InstanceId)] = []string{*mi.InstanceId, *mi.Name}
+	}
 	return table, nil
 }
 
 // findManagedInstances finds instance list which is possibly connected through ssm agent.
-func findManagedInstances(sess *session.Session, region string) ([]string, error) {
+func findManagedInstances(sess *session.Session, region string) ([]*ssm.InstanceInformation, error) {
 	svc := ssm.New(sess, aws.NewConfig().WithRegion(region))
-	var insts []string
+	var insts []*ssm.InstanceInformation
 	err := svc.DescribeInstanceInformationPages(nil,
 		func(page *ssm.DescribeInstanceInformationOutput, lastPage bool) bool {
 			for _, inst := range page.InstanceInformationList {
-				insts = append(insts, aws.StringValue(inst.InstanceId))
+				insts = append(insts, inst)
 			}
 			return true
 		})
