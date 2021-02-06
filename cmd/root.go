@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	gossmVersion = "1.2.3"
+	gossmVersion = "1.3.1"
 )
 
 var (
