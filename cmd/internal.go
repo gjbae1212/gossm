@@ -194,9 +194,6 @@ func setMultiTarget(c *Credential, s *Executor) error {
 		if err != nil {
 			return err
 		}
-		if domain == "" {
-			return fmt.Errorf("[err] don't exist running instances \n")
-		}
 
 		s.multiTarget = []string{s.target}
 		s.multiDomain = []string{domain}
@@ -450,7 +447,7 @@ func findDomainByInstanceId(sess *session.Session, region string, instanceId str
 			}
 		}
 	}
-	return "", nil
+	return "", fmt.Errorf("[err] instanceId not found")
 }
 
 // Call command
