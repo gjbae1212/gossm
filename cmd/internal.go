@@ -447,7 +447,7 @@ func findDomainByInstanceId(sess *session.Session, region string, instanceId str
 			}
 		}
 	}
-	return "", fmt.Errorf("[err] instanceId not found")
+	return "", fmt.Errorf("instanceId not found")
 }
 
 // Call command
