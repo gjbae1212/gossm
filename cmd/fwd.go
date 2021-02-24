@@ -16,6 +16,7 @@ var (
 		Long:  "Exec `fwd` under AWS SSM with interactive CLI",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			initCredential()
+			// set remote and local port values from cli flags (if present)
 			executor.remotePort = viper.GetString("remote-port")
 			executor.localPort = viper.GetString("local-port")
 
@@ -37,12 +38,14 @@ var (
 			printReady("start-port-forwarding", credential, executor)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			docName := "AWS-StartPortForwardingSession"
-
+			docName := "AWS-StartPortForwardingSession" // https://us-east-1.console.aws.amazon.com/systems-manager/documents/AWS-StartPortForwardingSession/description?region=us-east-1
 			input := &ssm.StartSessionInput{
 				DocumentName: &docName,
-				Parameters:   map[string][]*string{"portNumber": []*string{&executor.remotePort}, "localPortNumber": []*string{&executor.localPort}},
-				Target:       &executor.target,
+				Parameters: map[string][]*string{
+					"portNumber":      []*string{&executor.remotePort},
+					"localPortNumber": []*string{&executor.localPort},
+				},
+				Target: &executor.target,
 			}
 
 			// create session

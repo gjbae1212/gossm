@@ -223,6 +223,8 @@ func setSSHWithCLI(c *Credential, e *Executor) error {
 
 func setFwdPorts(c *Credential, e *Executor) error {
 
+	// If remote port was not specified as a cli arg
+	// then we prompt the user to enter the remote/local ports
 	if e.remotePort == "" {
 		remote, local, err := askPorts()
 		if err != nil {
@@ -231,6 +233,9 @@ func setFwdPorts(c *Credential, e *Executor) error {
 		e.remotePort = remote
 		e.localPort = local
 	}
+	// If user omits the localPort then simply set the value to
+	// the remote port. This mimics the behaviour if the -l flag
+	// is omitted when specifying the -z arg.
 	if e.localPort == "" {
 		e.localPort = e.remotePort
 	}
