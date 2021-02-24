@@ -107,6 +107,15 @@ $ gossm scp -e '-i key.pem file user@server-domain:/home/blahblah'
 # It is to execute a command("uptime") on selected multiple servers, waiting for a response on its result.
 $ gossm cmd -e "uptime" 
 ```
+
+#### fwd
+`-z` Optionally specify the remote port to access
+`-l` Optionally specify the local port to forward (If not specified when using `-z`, then this value defaults to the value of `-z`)
+
+```bash
+$ gossm fwd -z 8080 -l 42069
+```
+If not specified, you will be prompted to enter a remote and local port after selecting a target. 
  
 **ex)**  
 <p align="center">

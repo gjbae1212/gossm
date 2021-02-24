@@ -77,12 +77,12 @@ var (
 
 func init() {
 	// add sub command
+	fwdCommand.Flags().StringP("remote", "z", "", "[optional] remote port to forward to, ex) - 8080")
 	fwdCommand.Flags().StringP("local", "l", "", "[optional] local port to use, ex) \"-l 1234\"")
-	fwdCommand.Flags().StringP("remote", "z", "", "[required] remote port to forward to, ex) - 8080")
 
 	// mapping viper
-	viper.BindPFlag("local-port", fwdCommand.Flags().Lookup("local"))
 	viper.BindPFlag("remote-port", fwdCommand.Flags().Lookup("remote"))
+	viper.BindPFlag("local-port", fwdCommand.Flags().Lookup("local"))
 
 	rootCmd.AddCommand(fwdCommand)
 }
