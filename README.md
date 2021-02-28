@@ -27,7 +27,7 @@ Refer to detail information below.
    
 ## Prerequisite 
 - [required] Your ec2 servers in aws are installed [aws ssm agent](https://docs.aws.amazon.com/systems-manager/latest/userguide/ssm-agent.html).
-EC2 severs have to apply **AmazonEC2RoleforSSM** iam policy.     
+EC2 severs have to apply **AmazonSSMManagedInstanceCore** iam policy.     
 If you would like to use ssh, scp command using gossm, aws ssm agent version **2.3.672.0 or later** is installed on ec2. 
 - [required] **aws access key**, **aws secret key**
 - [required] **ec2:DescribeInstances**, **ssm:StartSession permission**, **ssm:DescribeInstanceInformation**     
