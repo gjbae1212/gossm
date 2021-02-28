@@ -45,7 +45,7 @@ release:
     name: gossm
 brews:
   - name: gossm
-    github:
+    tap:
       owner: gjbae1212
       name: homebrew-gossm
     commit_author:
