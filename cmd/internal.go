@@ -446,7 +446,11 @@ func findDomainByInstanceId(sess *session.Session, region string, instanceId str
 	for _, rv := range output.Reservations {
 		for _, inst := range rv.Instances {
 			if *inst.InstanceId == instanceId {
-				return *inst.PublicDnsName, nil
+				domain := *inst.PublicDnsName
+				if domain == "" {
+					domain = *inst.PrivateDnsName
+				}
+				return domain, nil
 			}
 		}
 	}
