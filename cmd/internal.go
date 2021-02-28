@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -220,6 +221,28 @@ func setSSHWithCLI(c *Credential, e *Executor) error {
 	return nil
 }
 
+func setFwdPorts(c *Credential, e *Executor) error {
+
+	// If remote port was not specified as a cli arg
+	// then we prompt the user to enter the remote/local ports
+	if e.remotePort == "" {
+		remote, local, err := askPorts()
+		if err != nil {
+			panicRed(err)
+		}
+		e.remotePort = remote
+		e.localPort = local
+	}
+	// If user omits the localPort then simply set the value to
+	// the remote port. This mimics the behaviour if the -l flag
+	// is omitted when specifying the -z arg.
+	if e.localPort == "" {
+		e.localPort = e.remotePort
+	}
+
+	return nil
+}
+
 // interactive CLI
 func askUser() (user string, err error) {
 	prompt := &survey.Input{
@@ -329,6 +352,29 @@ func askMultiTarget(sess *session.Session, region string) (targets, domains []st
 		domains = append(domains, table[k][1])
 	}
 	return
+}
+
+func askPorts() (remote, local string, err error) {
+	prompts := []*survey.Question{
+		{
+			Name:   "remote",
+			Prompt: &survey.Input{Message: "Remote port to access:"},
+		},
+		{
+			Name:   "local",
+			Prompt: &survey.Input{Message: "Local port number to forward:"},
+		},
+	}
+	ports := struct {
+		Remote string
+		Local  string
+	}{}
+	survey.Ask(prompts, &ports)
+	if ports.Remote == "" || len(ports.Remote) > 5 {
+		err = errors.New("you must specify a valid port number")
+		return "", "", err
+	}
+	return ports.Remote, ports.Local, nil
 }
 
 // findInstances finds instances.

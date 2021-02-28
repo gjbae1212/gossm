@@ -64,6 +64,8 @@ type Executor struct {
 	user        string
 	execCommand string
 	sshKey      string
+	localPort   string
+	remotePort  string
 	multiTarget []string
 	multiDomain []string
 }
