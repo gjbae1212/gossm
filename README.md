@@ -99,6 +99,10 @@ $ gossm scp -e 'file user@server-domain:/home/blahblah'
 $ gossm scp -e '-i key.pem file user@server-domain:/home/blahblah'
 
 ```
+**ex)**  
+<p align="center">
+<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/ssh.gif" width="500", height="450" />
+</p>
 
 #### cmd 
 `-e` required args, it is a parameter for execute to command on selected servers.
@@ -116,11 +120,6 @@ $ gossm cmd -e "uptime"
 $ gossm fwd -z 8080 -l 42069
 ```
 If not specified, you will be prompted to enter a remote and local port after selecting a target. 
- 
-**ex)**  
-<p align="center">
-<img src="https://storage.googleapis.com/gjbae1212-asset/gossm/ssh.gif" width="500", height="450" />
-</p>
 
 #### mfa
 `-deadline` it's to set expire time for temporary credentials. **default** is 6 hours.  
