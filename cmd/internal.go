@@ -381,9 +381,14 @@ func askPorts() (remote, local string, err error) {
 func findInstances(sess *session.Session, region string) (map[string][]string, error) {
 	svc := ec2.New(sess, aws.NewConfig().WithRegion(region))
 
-	// Filter to return all running instances, guarantees results when user lacks the ssm:DescribeInstanceInformation permission
-	input := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{{Name: aws.String("instance-state-name"), Values: []*string{aws.String("running")}}},
+	// Filter to return all running instances, guarantees results when user lacks the ssm:DescribeInstanceInformation permission.
+	// Multiple requests are required when many instances are running due to API limitations on
+	// the number of filter values provided to this method.
+	var inputs []*ec2.DescribeInstancesInput
+
+	instanceRunningFilter := &ec2.Filter{
+		Name:   aws.String("instance-state-name"),
+		Values: []*string{aws.String("running")},
 	}
 
 	var ec2InstanceIds []string
@@ -392,6 +397,7 @@ func findInstances(sess *session.Session, region string) (map[string][]string, e
 	// get all SSM connected instances
 	managedInstances, err := findManagedInstances(sess, region)
 	if err != nil || len(managedInstances) == 0 {
+		inputs = []*ec2.DescribeInstancesInput{{Filters: []*ec2.Filter{instanceRunningFilter}}}
 	} else {
 		// sort results as EC2 or Non-EC2 instances
 		for _, i := range managedInstances {
@@ -403,17 +409,47 @@ func findInstances(sess *session.Session, region string) (map[string][]string, e
 				}
 			}
 		}
-		// Add ec2InstancesIds to our filter so we only get SSM connected instances from the DescribeInstances call
-		input.Filters = append(input.Filters, &ec2.Filter{Name: aws.String("instance-id"), Values: aws.StringSlice(ec2InstanceIds)})
+
+		// Add ec2InstancesIds to our filter so we only get SSM connected instances from the DescribeInstances call.
+		//
+		// The maximum amount of filters and filter values that can be specified per-request is 200.
+		// When we have many instances in an account, we want to break this up into multiple requests.
+		const maxFilterValues = 200 - 1 // Subtract one since the instanceRunningFilter is always added.
+
+		n := len(ec2InstanceIds)
+		numBatches := (n / maxFilterValues) + 1
+
+		for i := 0; i < numBatches; i++ {
+			start := i * maxFilterValues
+			end := start + maxFilterValues
+			if end > n {
+				end = n
+			}
+
+			input := &ec2.DescribeInstancesInput{
+				Filters: []*ec2.Filter{
+					instanceRunningFilter,
+					{Name: aws.String("instance-id"), Values: aws.StringSlice(ec2InstanceIds[start:end])},
+				},
+			}
+
+			inputs = append(inputs, input)
+		}
 	}
 
-	output, err := svc.DescribeInstances(input)
-	if err != nil {
-		return nil, err
+	var reservations []*ec2.Reservation
+
+	for _, input := range inputs {
+		output, err := svc.DescribeInstances(input)
+		if err != nil {
+			return nil, err
+		}
+
+		reservations = append(reservations, output.Reservations...)
 	}
 
 	table := make(map[string][]string)
-	for _, rv := range output.Reservations {
+	for _, rv := range reservations {
 		for _, inst := range rv.Instances {
 			name := ""
 			for _, tag := range inst.Tags {
