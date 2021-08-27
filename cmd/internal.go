@@ -505,7 +505,7 @@ func findInstanceIdByIp(sess *session.Session, region, ip string) (string, error
 				return *inst.InstanceId, nil
 			}
 			if inst.PrivateIpAddress != nil && ip == *inst.PublicIpAddress {
-				return *inst.PublicIpAddress, nil
+				return *inst.InstanceId, nil
 			}
 		}
 	}
