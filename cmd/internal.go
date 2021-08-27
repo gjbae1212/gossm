@@ -52,7 +52,7 @@ func setTarget(c *Credential, e *Executor) error {
 			return err
 		}
 	} else {
-		e.domain, err = findDomainByInstanceId(c.awsSession, c.awsRegion, e.target)
+		e.domain, e.target, err = findDomainByInstanceId(c.awsSession, c.awsRegion, e.target)
 		if err != nil {
 			return err
 		}
@@ -191,7 +191,7 @@ func setMultiTarget(c *Credential, s *Executor) error {
 		s.multiTarget = targets
 		s.multiDomain = domains
 	} else {
-		domain, err := findDomainByInstanceId(c.awsSession, c.awsRegion, s.target)
+		domain, target, err := findDomainByInstanceId(c.awsSession, c.awsRegion, s.target)
 		if err != nil {
 			return err
 		}
@@ -199,7 +199,7 @@ func setMultiTarget(c *Credential, s *Executor) error {
 			return fmt.Errorf("[err] don't exist running instances \n")
 		}
 
-		s.multiTarget = []string{s.target}
+		s.multiTarget = []string{target}
 		s.multiDomain = []string{domain}
 	}
 	return nil
@@ -513,7 +513,7 @@ func findInstanceIdByIp(sess *session.Session, region, ip string) (string, error
 }
 
 // findDomainByInstanceId finds domain by instanceId.
-func findDomainByInstanceId(sess *session.Session, region string, instanceId string) (string, error) {
+func findDomainByInstanceId(sess *session.Session, region string, instanceId string) (string, string, error) {
 	svc := ec2.New(sess, aws.NewConfig().WithRegion(region))
 	input := &ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{
@@ -523,20 +523,27 @@ func findDomainByInstanceId(sess *session.Session, region string, instanceId str
 
 	output, err := svc.DescribeInstances(input)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	for _, rv := range output.Reservations {
 		for _, inst := range rv.Instances {
-			if *inst.InstanceId == instanceId {
+			name := ""
+			for _, tag := range inst.Tags {
+				if *tag.Key == "Name" {
+					name = *tag.Value
+					break
+				}
+			}
+			if *inst.InstanceId == instanceId || name == instanceId {
 				domain := *inst.PublicDnsName
 				if domain == "" {
 					domain = *inst.PrivateDnsName
 				}
-				return domain, nil
+				return domain, *inst.InstanceId, nil
 			}
 		}
 	}
-	return "", nil
+	return "", "", nil
 }
 
 // Call command
