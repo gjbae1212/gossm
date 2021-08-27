@@ -501,11 +501,11 @@ func findInstanceIdByIp(sess *session.Session, region, ip string) (string, error
 	}
 	for _, rv := range output.Reservations {
 		for _, inst := range rv.Instances {
-			if inst.PublicIpAddress == nil || inst.PrivateIpAddress == nil {
-				continue
-			}
-			if ip == *inst.PublicIpAddress || ip == *inst.PrivateIpAddress {
+			if inst.PublicIpAddress != nil && ip == *inst.PublicIpAddress{
 				return *inst.InstanceId, nil
+			}
+			if inst.PrivateIpAddress != nil && ip == *inst.PublicIpAddress {
+				return *inst.PublicIpAddress, nil
 			}
 		}
 	}
