@@ -19,4 +19,4 @@ jobs:
           name: RUN UNIT TEST
           environment:
             GO111MODULE: "on"
-          command: bash script.sh test
+          command: bash scripts/deploy.sh test_with_circleci
