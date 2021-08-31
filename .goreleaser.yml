@@ -3,8 +3,7 @@
 env:
 before:
   hooks:
-    - go mod download
-    - packr2
+    - go mod tidy
 builds:
   - binary: gossm
     env:
