@@ -22,7 +22,7 @@ Because AWS Systems Manger Session Manager is using ssh protocol tunneling.
 **Additionally Features**
 - `mfa` command has added. this command is to authenticate through AWS MFA, and then to save issued a temporary credentials in $HOME/.aws/credentials_mfa. (default expired time is after 6 hours)  
 You should export global environment, such as `export AWS_SHARED_CREDENTIALS_FILE=$HOME/.aws/credentials_mfa`.    
-With completed, you can execute aws cli and gossm conveniently without mfa authenticated.    
+With completed, you can execute AWS CLI and gossm conveniently without mfa authenticated.    
 Refer to detail information below.
    
 ## Prerequisite 
@@ -34,21 +34,18 @@ If you would like to use ssh, scp command using gossm, aws ssm agent version **2
 - [optional] It's better to possibly get to additional permission for **ec2:DescribeRegions**, **ssm:TerminateSession**
 
 ## Install
-Support **x86_64**
-```bash 
-# homebrew
+### Homebrew
+```
+# install
 $ brew tap gjbae1212/gossm
 $ brew install gossm
 
-# mac
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.3.2/gossm_1.3.2_Darwin_x86_64.tar.gz
-
-# linux
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.3.2/gossm_1.3.2_Linux_x86_64.tar.gz
-
-# window
-$ wget https://github.com/gjbae1212/gossm/releases/download/v1.3.2/gossm_1.3.2_Windows_x86_64.tar.gz
+# upgrade
+$ brew upgrade gossm
 ```
+
+### Download
+[download](https://github.com/gjbae1212/gossm/releases)
 
 ## How to use
 ### global command args
@@ -57,7 +54,6 @@ $ wget https://github.com/gjbae1212/gossm/releases/download/v1.3.2/gossm_1.3.2_W
 | -c             | (optional) aws credentials file | $HOME/.aws/credentials |
 | -p             | (optional) if you are having multiple aws profiles in credentials, it is name one of profiles | default |
 | -r             | (optional) region in AWS that would like to connect |  |
-| -t             | (optional) instanceId of server in AWS that would like to connect | |
 
 If your machine don't exist $HOME/.aws/.credentials, have to pass `-c` args.  
 ```
@@ -70,7 +66,6 @@ aws_secret_access_key = AWS SECRET KEY
 `-r` or `-t` don't pass args, it can select through interactive CLI.  
     
 ### command
-
 #### start
 ```bash
 $ gossm start 
