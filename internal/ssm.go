@@ -118,7 +118,7 @@ func AskTarget(ctx context.Context, cfg aws.Config) (*Target, error) {
 	}
 	sort.Strings(options)
 	if len(options) == 0 {
-		return nil, fmt.Errorf("not found target")
+		return nil, fmt.Errorf("not found ec2 instances")
 	}
 
 	prompt := &survey.Select{
