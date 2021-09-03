@@ -120,12 +120,12 @@ func initConfig() {
 	} else {
 		sharedCredFile, err = filepath.Abs(sharedCredFile)
 		if err != nil {
-			color.Red("[err] invalid AWS_SHARED_CREDENTIALS_FILE environments path, such as %w", err)
+			color.Yellow("[Warning] invalid AWS_SHARED_CREDENTIALS_FILE environments path, such as %w", err)
 			os.Unsetenv("AWS_SHARED_CREDENTIALS_FILE")
 			sharedCredFile = ""
 		} else {
 			if _, err := os.Stat(sharedCredFile); os.IsNotExist(err) {
-				color.Red("[err] not found AWS_SHARED_CREDENTIALS_FILE environments file, such as %s", sharedCredFile)
+				color.Yellow("[Warning] not found AWS_SHARED_CREDENTIALS_FILE environments file, such as %s", sharedCredFile)
 				os.Unsetenv("AWS_SHARED_CREDENTIALS_FILE")
 				sharedCredFile = ""
 			}
@@ -205,11 +205,11 @@ func initConfig() {
 			// get cred by only config
 			temporaryConfig, err = internal.NewSharedConfig(context.Background(), _credential.awsProfile,
 				[]string{config.DefaultSharedConfigFilename()}, []string{})
-			if err != nil {
-				panicRed(internal.WrapError(err))
+			if err == nil {
+				temporaryCredentials, err = temporaryConfig.Credentials.Retrieve(context.Background())
 			}
 
-			temporaryCredentials, err = temporaryConfig.Credentials.Retrieve(context.Background())
+			// error is raised or temporaryCredentials is invalid.
 			if err != nil || temporaryCredentials.Expired() ||
 				temporaryCredentials.AccessKeyID == "" || temporaryCredentials.SecretAccessKey == "" ||
 				(subcmd.Use == "mfa" && temporaryCredentials.SessionToken != "") {
