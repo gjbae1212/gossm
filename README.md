@@ -35,7 +35,7 @@ Refer to detail information below.
 - [required] your **aws access key**, **aws secret key**
 - [required] **ec2:DescribeInstances**, **ssm:StartSession**, **ssm:TerminateSession**, **ssm:DescribeSessions**, **ssm:DescribeInstanceInformation**, **ssm:DescribeInstanceProperties**, **ssm:GetConnectionStatus** 
 - [optional] It's better to possibly get to additional permission for **ec2:DescribeRegions**
-- 
+
 ## Install
 ### Homebrew
 ```
