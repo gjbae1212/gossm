@@ -25,14 +25,17 @@ You should export global environment, such as `export AWS_SHARED_CREDENTIALS_FIL
 With completed, you can execute AWS CLI and gossm conveniently without mfa authenticated.    
 Refer to detail information below.
    
-## Prerequisite 
-- [required] Your ec2 servers in aws are installed [aws ssm agent](https://docs.aws.amazon.com/systems-manager/latest/userguide/ssm-agent.html).
-EC2 severs have to apply **AmazonSSMManagedInstanceCore** iam policy.     
-If you would like to use ssh, scp command using gossm, aws ssm agent version **2.3.672.0 or later** is installed on ec2. 
-- [required] **aws access key**, **aws secret key**
-- [required] **ec2:DescribeInstances**, **ssm:StartSession permission**, **ssm:DescribeInstanceInformation**     
-- [optional] It's better to possibly get to additional permission for **ec2:DescribeRegions**, **ssm:TerminateSession**
+## Prerequisite
+### ec2
+- [required] Your ec2 servers in aws are installed [aws ssm agent](https://docs.aws.amazon.com/systems-manager/latest/userguide/ssm-agent.html). 
+- [required] ec2 severs have to attach **AmazonSSMManagedInstanceCore** iam policy.
+- If you would like to use ssh, scp command using gossm, aws ssm agent version **2.3.672.0 or later** is installed on ec2.
 
+### user
+- [required] your **aws access key**, **aws secret key**
+- [required] **ec2:DescribeInstances**, **ssm:StartSession**, **ssm:TerminateSession**, **ssm:DescribeSessions**, **ssm:DescribeInstanceInformation**, **ssm:DescribeInstanceProperties**, **ssm:GetConnectionStatus** 
+- [optional] It's better to possibly get to additional permission for **ec2:DescribeRegions**
+- 
 ## Install
 ### Homebrew
 ```
