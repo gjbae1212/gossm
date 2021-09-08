@@ -134,12 +134,8 @@ func initConfig() {
 
 	// if shared cred file is exist.
 	if sharedCredFile != "" {
-		profile := _credential.awsProfile
-		if sharedCredFile == _credentialWithMFA { // gossm mfa profile is default.
-			profile = _defaultProfile
-		}
 		awsConfig, err := internal.NewSharedConfig(context.Background(),
-			profile,
+			_credential.awsProfile,
 			[]string{config.DefaultSharedConfigFilename()},
 			[]string{sharedCredFile},
 		)
@@ -148,12 +144,8 @@ func initConfig() {
 		}
 
 		cred, err := awsConfig.Credentials.Retrieve(context.Background())
-		if err != nil {
-			panicRed(internal.WrapError(err))
-		}
-
 		// delete invalid shared credential.
-		if cred.Expired() || cred.AccessKeyID == "" || cred.SecretAccessKey == "" {
+		if err != nil || cred.Expired() || cred.AccessKeyID == "" || cred.SecretAccessKey == "" {
 			color.Yellow("[Expire] gossm default mfa credential file %s", sharedCredFile)
 			os.Unsetenv("AWS_SHARED_CREDENTIALS_FILE")
 		} else {
@@ -227,6 +219,11 @@ func initConfig() {
 				if temporaryCredentials.Expired() || temporaryCredentials.AccessKeyID == "" || temporaryCredentials.SecretAccessKey == "" {
 					panicRed(internal.WrapError(fmt.Errorf("[err] not found credentials")))
 				}
+
+				// extract aws region if awsRegion is empty.
+				if awsRegion == "" {
+					awsRegion = temporaryConfig.Region
+				}
 			}
 		}
 
@@ -241,9 +238,7 @@ func initConfig() {
 
 		os.Setenv("AWS_SHARED_CREDENTIALS_FILE", _credentialWithTemporary)
 		awsConfig, err := internal.NewSharedConfig(context.Background(),
-			_credential.awsProfile,
-			[]string{config.DefaultSharedConfigFilename()},
-			[]string{_credentialWithTemporary},
+			_credential.awsProfile, []string{}, []string{_credentialWithTemporary},
 		)
 		if err != nil {
 			panicRed(internal.WrapError(err))
