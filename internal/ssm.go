@@ -23,6 +23,10 @@ import (
 	"github.com/fatih/color"
 )
 
+const (
+	maxOutputResults = 50
+)
+
 var (
 	// default aws regions
 	defaultAwsRegions = []string{
@@ -204,14 +208,38 @@ func AskPorts() (port *Port, retErr error) {
 
 // FindInstances returns all of instances-map with running state.
 func FindInstances(ctx context.Context, cfg aws.Config) (map[string]*Target, error) {
+	var (
+		client     = ec2.NewFromConfig(cfg)
+		table      = make(map[string]*Target)
+		outputFunc = func(table map[string]*Target, output *ec2.DescribeInstancesOutput) {
+			for _, rv := range output.Reservations {
+				for _, inst := range rv.Instances {
+					name := ""
+					for _, tag := range inst.Tags {
+						if aws.ToString(tag.Key) == "Name" {
+							name = aws.ToString(tag.Value)
+							break
+						}
+					}
+					table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = &Target{
+						Name:          aws.ToString(inst.InstanceId),
+						PublicDomain:  aws.ToString(inst.PublicDnsName),
+						PrivateDomain: aws.ToString(inst.PrivateDnsName),
+					}
+				}
+			}
+		}
+	)
+
+	// get instance ids which possibly can connect to instances using ssm.
 	instances, err := FindInstanceIdsWithConnectedSSM(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	client := ec2.NewFromConfig(cfg)
 	output, err := client.DescribeInstances(ctx,
 		&ec2.DescribeInstancesInput{
+			MaxResults: aws.Int32(maxOutputResults),
 			Filters: []ec2_types.Filter{
 				{Name: aws.String("instance-state-name"), Values: []string{"running"}},
 				{Name: aws.String("instance-id"), Values: instances},
@@ -220,40 +248,7 @@ func FindInstances(ctx context.Context, cfg aws.Config) (map[string]*Target, err
 	if err != nil {
 		return nil, err
 	}
-
-	table := make(map[string]*Target)
-	for _, rv := range output.Reservations {
-		for _, inst := range rv.Instances {
-			name := ""
-			for _, tag := range inst.Tags {
-				if aws.ToString(tag.Key) == "Name" {
-					name = aws.ToString(tag.Value)
-					break
-				}
-			}
-			table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = &Target{
-				Name:          aws.ToString(inst.InstanceId),
-				PublicDomain:  aws.ToString(inst.PublicDnsName),
-				PrivateDomain: aws.ToString(inst.PrivateDnsName),
-			}
-		}
-	}
-	return table, nil
-}
-
-// FindInstanceIdsWithConnectedSSM asks you which selects instances.
-func FindInstanceIdsWithConnectedSSM(ctx context.Context, cfg aws.Config) ([]string, error) {
-	client := ssm.NewFromConfig(cfg)
-
-	var instances []string
-	output, err := client.DescribeInstanceInformation(ctx, &ssm.DescribeInstanceInformationInput{MaxResults: 50})
-	if err != nil {
-		return nil, err
-	}
-
-	for _, inst := range output.InstanceInformationList {
-		instances = append(instances, aws.ToString(inst.InstanceId))
-	}
+	outputFunc(table, output)
 
 	// Repeat it when if output.NextToken exists.
 	if aws.ToString(output.NextToken) != "" {
@@ -262,16 +257,62 @@ func FindInstanceIdsWithConnectedSSM(ctx context.Context, cfg aws.Config) ([]str
 			if token == "" {
 				break
 			}
-			subOutput, err := client.DescribeInstanceInformation(ctx, &ssm.DescribeInstanceInformationInput{
+
+			nextOutput, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+				MaxResults: aws.Int32(maxOutputResults),
 				NextToken:  aws.String(token),
-				MaxResults: 50})
+				Filters: []ec2_types.Filter{
+					{Name: aws.String("instance-state-name"), Values: []string{"running"}},
+					{Name: aws.String("instance-id"), Values: instances},
+				},
+			})
 			if err != nil {
 				return nil, err
 			}
-			for _, inst := range subOutput.InstanceInformationList {
+			outputFunc(table, nextOutput)
+
+			token = aws.ToString(nextOutput.NextToken)
+		}
+	}
+
+	return table, nil
+}
+
+// FindInstanceIdsWithConnectedSSM asks you which selects instances.
+func FindInstanceIdsWithConnectedSSM(ctx context.Context, cfg aws.Config) ([]string, error) {
+	var (
+		instances  []string
+		client     = ssm.NewFromConfig(cfg)
+		outputFunc = func(instances []string, output *ssm.DescribeInstanceInformationOutput) []string {
+			for _, inst := range output.InstanceInformationList {
 				instances = append(instances, aws.ToString(inst.InstanceId))
 			}
-			token = aws.ToString(subOutput.NextToken)
+			return instances
+		}
+	)
+
+	output, err := client.DescribeInstanceInformation(ctx, &ssm.DescribeInstanceInformationInput{MaxResults: maxOutputResults})
+	if err != nil {
+		return nil, err
+	}
+	instances = outputFunc(instances, output)
+
+	// Repeat it when if output.NextToken exists.
+	if aws.ToString(output.NextToken) != "" {
+		token := aws.ToString(output.NextToken)
+		for {
+			if token == "" {
+				break
+			}
+			nextOutput, err := client.DescribeInstanceInformation(ctx, &ssm.DescribeInstanceInformationInput{
+				NextToken:  aws.String(token),
+				MaxResults: maxOutputResults})
+			if err != nil {
+				return nil, err
+			}
+			instances = outputFunc(instances, nextOutput)
+
+			token = aws.ToString(nextOutput.NextToken)
 		}
 	}
 
@@ -280,9 +321,26 @@ func FindInstanceIdsWithConnectedSSM(ctx context.Context, cfg aws.Config) ([]str
 
 // FindInstanceIdByIp returns instance ids by ip.
 func FindInstanceIdByIp(ctx context.Context, cfg aws.Config, ip string) (string, error) {
-	client := ec2.NewFromConfig(cfg)
+	var (
+		instanceId string
+		client     = ec2.NewFromConfig(cfg)
+		outputFunc = func(output *ec2.DescribeInstancesOutput) string {
+			for _, rv := range output.Reservations {
+				for _, inst := range rv.Instances {
+					if inst.PublicIpAddress == nil && inst.PrivateIpAddress == nil {
+						continue
+					}
+					if ip == aws.ToString(inst.PublicIpAddress) || ip == aws.ToString(inst.PrivateIpAddress) {
+						return *inst.InstanceId
+					}
+				}
+			}
+			return ""
+		}
+	)
 
 	output, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+		MaxResults: aws.Int32(maxOutputResults),
 		Filters: []ec2_types.Filter{
 			{Name: aws.String("instance-state-name"), Values: []string{"running"}},
 		},
@@ -291,14 +349,35 @@ func FindInstanceIdByIp(ctx context.Context, cfg aws.Config, ip string) (string,
 		return "", err
 	}
 
-	for _, rv := range output.Reservations {
-		for _, inst := range rv.Instances {
-			if inst.PublicIpAddress == nil && inst.PrivateIpAddress == nil {
-				continue
+	instanceId = outputFunc(output)
+	if instanceId != "" {
+		return instanceId, nil
+	}
+
+	// Repeat it when if instanceId isn't found and output.NextToken exists.
+	if aws.ToString(output.NextToken) != "" {
+		token := aws.ToString(output.NextToken)
+		for {
+			if token == "" {
+				break
 			}
-			if ip == aws.ToString(inst.PublicIpAddress) || ip == aws.ToString(inst.PrivateIpAddress) {
-				return *inst.InstanceId, nil
+			nextOutput, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+				MaxResults: aws.Int32(maxOutputResults),
+				NextToken:  aws.String(token),
+				Filters: []ec2_types.Filter{
+					{Name: aws.String("instance-state-name"), Values: []string{"running"}},
+				},
+			})
+			if err != nil {
+				return "", err
 			}
+
+			instanceId = outputFunc(nextOutput)
+			if instanceId != "" {
+				return instanceId, nil
+			}
+
+			token = aws.ToString(nextOutput.NextToken)
 		}
 	}
 
@@ -307,9 +386,23 @@ func FindInstanceIdByIp(ctx context.Context, cfg aws.Config, ip string) (string,
 
 // FindDomainByInstanceId returns domain by instance id.
 func FindDomainByInstanceId(ctx context.Context, cfg aws.Config, instanceId string) ([]string, error) {
-	client := ec2.NewFromConfig(cfg)
+	var (
+		domain     []string
+		client     = ec2.NewFromConfig(cfg)
+		outputFunc = func(output *ec2.DescribeInstancesOutput, id string) []string {
+			for _, rv := range output.Reservations {
+				for _, inst := range rv.Instances {
+					if aws.ToString(inst.InstanceId) == id {
+						return []string{aws.ToString(inst.PublicDnsName), aws.ToString(inst.PrivateDnsName)}
+					}
+				}
+			}
+			return []string{}
+		}
+	)
 
 	output, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+		MaxResults: aws.Int32(maxOutputResults),
 		Filters: []ec2_types.Filter{
 			{Name: aws.String("instance-state-name"), Values: []string{"running"}},
 		},
@@ -318,13 +411,38 @@ func FindDomainByInstanceId(ctx context.Context, cfg aws.Config, instanceId stri
 		return []string{}, err
 	}
 
-	for _, rv := range output.Reservations {
-		for _, inst := range rv.Instances {
-			if aws.ToString(inst.InstanceId) == instanceId {
-				return []string{aws.ToString(inst.PublicDnsName), aws.ToString(inst.PrivateDnsName)}, nil
+	domain = outputFunc(output, instanceId)
+	if len(domain) != 0 {
+		return domain, nil
+	}
+
+	// Repeat it when if domain isn't found and output.NextToken exists.
+	if aws.ToString(output.NextToken) != "" {
+		token := aws.ToString(output.NextToken)
+		for {
+			if token == "" {
+				break
 			}
+			nextOutput, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+				MaxResults: aws.Int32(maxOutputResults),
+				NextToken:  aws.String(token),
+				Filters: []ec2_types.Filter{
+					{Name: aws.String("instance-state-name"), Values: []string{"running"}},
+				},
+			})
+			if err != nil {
+				return []string{}, err
+			}
+
+			domain = outputFunc(nextOutput, instanceId)
+			if len(domain) != 0 {
+				return domain, nil
+			}
+
+			token = aws.ToString(nextOutput.NextToken)
 		}
 	}
+
 	return []string{}, nil
 }
 
