@@ -237,42 +237,24 @@ func FindInstances(ctx context.Context, cfg aws.Config) (map[string]*Target, err
 		return nil, err
 	}
 
-	output, err := client.DescribeInstances(ctx,
-		&ec2.DescribeInstancesInput{
-			MaxResults: aws.Int32(maxOutputResults),
-			Filters: []ec2_types.Filter{
-				{Name: aws.String("instance-state-name"), Values: []string{"running"}},
-				{Name: aws.String("instance-id"), Values: instances},
-			},
-		})
-	if err != nil {
-		return nil, err
-	}
-	outputFunc(table, output)
-
-	// Repeat it when if output.NextToken exists.
-	if aws.ToString(output.NextToken) != "" {
-		token := aws.ToString(output.NextToken)
-		for {
-			if token == "" {
-				break
-			}
-
-			nextOutput, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
-				MaxResults: aws.Int32(maxOutputResults),
-				NextToken:  aws.String(token),
+	for len(instances) > 0 {
+		max := len(instances)
+		// The maximum number of filter values specified on a single call is 200.
+		if max >= 200 {
+			max = 199
+		}
+		output, err := client.DescribeInstances(ctx,
+			&ec2.DescribeInstancesInput{
 				Filters: []ec2_types.Filter{
 					{Name: aws.String("instance-state-name"), Values: []string{"running"}},
-					{Name: aws.String("instance-id"), Values: instances},
+					{Name: aws.String("instance-id"), Values: instances[:max]},
 				},
 			})
-			if err != nil {
-				return nil, err
-			}
-			outputFunc(table, nextOutput)
-
-			token = aws.ToString(nextOutput.NextToken)
+		if err != nil {
+			return nil, err
 		}
+		outputFunc(table, output)
+		instances = instances[max:]
 	}
 
 	return table, nil
