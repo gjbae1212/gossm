@@ -428,6 +428,20 @@ func FindDomainByInstanceId(ctx context.Context, cfg aws.Config, instanceId stri
 	return []string{}, nil
 }
 
+// AskUser asks you which selects a user.
+func AskHost() (host string, retErr error) {
+	prompt := &survey.Input{
+		Message: "Type your host address you want to forward to:",
+	}
+	survey.AskOne(prompt, &host)
+	host = strings.TrimSpace(host)
+	if host == "" {
+		retErr = errors.New("you must specify a host address")
+		return
+	}
+	return
+}
+
 // CreateStartSession creates start session.
 func CreateStartSession(ctx context.Context, cfg aws.Config, input *ssm.StartSessionInput) (*ssm.StartSessionOutput, error) {
 	client := ssm.NewFromConfig(cfg)
