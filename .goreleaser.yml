@@ -21,7 +21,7 @@ builds:
       - all=-trimpath={{.Env.GOPATH}}
     ldflags:
       - -s -w
-      - -X main.gossmVersion=v1.4.6 # version
+      - -X main.gossmVersion=v1.5.0 # version
     ignore:
       - goos: windows
         goarch: arm64

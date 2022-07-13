@@ -17,6 +17,9 @@ function test_with_circleci
 
 function release
 {
+  sudo rm -rf $CURRENT/dist
+  sudo rm -rf $CURRENT/gopath
+  export GOPATH=$CURRENT/gopath
 
   tag=$1
   if [ -z "$tag" ]
@@ -29,6 +32,14 @@ function release
   git push origin $tag
 
   goreleaser release --rm-dist
+}
+
+function release_test
+{
+  sudo rm -rf $CURRENT/dist
+  sudo rm -rf $CURRENT/gopath
+  export GOPATH=$CURRENT/gopath
+  goreleaser release --snapshot --rm-dist
 }
 
 CMD=$1
