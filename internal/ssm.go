@@ -43,7 +43,7 @@ var (
 
 type (
 	Target struct {
-		Name          string
+		InstanceId    string
 		PublicDomain  string
 		PrivateDomain string
 	}
@@ -222,7 +222,7 @@ func FindInstances(ctx context.Context, cfg aws.Config) (map[string]*Target, err
 						}
 					}
 					table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = &Target{
-						Name:          aws.ToString(inst.InstanceId),
+						InstanceId:    aws.ToString(inst.InstanceId),
 						PublicDomain:  aws.ToString(inst.PublicDnsName),
 						PrivateDomain: aws.ToString(inst.PrivateDnsName),
 					}
@@ -468,7 +468,7 @@ func SendCommand(ctx context.Context, cfg aws.Config, targets []*Target, command
 
 	var ids []string
 	for _, t := range targets {
-		ids = append(ids, t.Name)
+		ids = append(ids, t.InstanceId)
 	}
 
 	input := &ssm.SendCommandInput{

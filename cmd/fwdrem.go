@@ -37,7 +37,7 @@ var (
 					panicRed(err)
 				}
 				for _, t := range table {
-					if t.Name == argTarget {
+					if t.InstanceId == argTarget {
 						target = t
 						break
 					}
@@ -79,7 +79,7 @@ var (
 				host = argHost
 			}
 
-			internal.PrintReady(fmt.Sprintf("start-port-forwarding %s -> %s", localPort, remotePort), _credential.awsConfig.Region, target.Name)
+			internal.PrintReady(fmt.Sprintf("start-port-forwarding %s -> %s", localPort, remotePort), _credential.awsConfig.Region, target.InstanceId)
 
 			docName := "AWS-StartPortForwardingSessionToRemoteHost" // https://us-east-1.console.aws.amazon.com/systems-manager/documents/AWS-StartPortForwardingSession/description?region=us-east-1
 
@@ -90,7 +90,7 @@ var (
 					"localPortNumber": []string{localPort},
 					"host":            []string{host},
 				},
-				Target: aws.String(target.Name),
+				Target: aws.String(target.InstanceId),
 			}
 
 			// start session

@@ -36,7 +36,7 @@ var (
 				if err != nil {
 					panicRed(err)
 				}
-				targetName = target.Name
+				targetName = target.InstanceId
 
 				sshUser, err := internal.AskUser()
 				if err != nil {

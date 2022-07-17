@@ -40,7 +40,7 @@ var (
 					panicRed(err)
 				}
 				for _, t := range table {
-					if t.Name == argTarget {
+					if t.InstanceId == argTarget {
 						targets = append(targets, t)
 						break
 					}
@@ -56,7 +56,7 @@ var (
 
 			var targetName string
 			for _, t := range targets {
-				targetName += " " + t.Name + " "
+				targetName += " " + t.InstanceId + " "
 			}
 
 			internal.PrintReady(exec, _credential.awsConfig.Region, targetName)

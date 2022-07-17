@@ -33,7 +33,7 @@ var (
 					panicRed(err)
 				}
 				for _, t := range table {
-					if t.Name == argTarget {
+					if t.InstanceId == argTarget {
 						target = t
 						break
 					}
@@ -45,9 +45,9 @@ var (
 					panicRed(err)
 				}
 			}
-			internal.PrintReady("start-session", _credential.awsConfig.Region, target.Name)
+			internal.PrintReady("start-session", _credential.awsConfig.Region, target.InstanceId)
 
-			input := &ssm.StartSessionInput{Target: aws.String(target.Name)}
+			input := &ssm.StartSessionInput{Target: aws.String(target.InstanceId)}
 			session, err := internal.CreateStartSession(ctx, *_credential.awsConfig, input)
 			if err != nil {
 				panicRed(err)
