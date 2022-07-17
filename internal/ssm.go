@@ -43,6 +43,7 @@ var (
 
 type (
 	Target struct {
+		Name          string
 		InstanceId    string
 		PublicDomain  string
 		PrivateDomain string
@@ -212,6 +213,8 @@ func FindInstances(ctx context.Context, cfg aws.Config) (map[string]*Target, err
 		client     = ec2.NewFromConfig(cfg)
 		table      = make(map[string]*Target)
 		outputFunc = func(table map[string]*Target, output *ec2.DescribeInstancesOutput) {
+			var instances []Target
+			var maxNameLen = 0
 			for _, rv := range output.Reservations {
 				for _, inst := range rv.Instances {
 					name := ""
@@ -221,12 +224,20 @@ func FindInstances(ctx context.Context, cfg aws.Config) (map[string]*Target, err
 							break
 						}
 					}
-					table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = &Target{
+					if len(name) > maxNameLen {
+						maxNameLen = len(name)
+					}
+					instances = append(instances, Target{
+						Name:          name,
 						InstanceId:    aws.ToString(inst.InstanceId),
 						PublicDomain:  aws.ToString(inst.PublicDnsName),
 						PrivateDomain: aws.ToString(inst.PrivateDnsName),
-					}
+					})
 				}
+			}
+			for _, target := range instances {
+				padding := strings.Repeat(" ", maxNameLen-len(target.Name))
+				table[fmt.Sprintf("%s%s %s", target.Name, padding, target.InstanceId)] = &target
 			}
 		}
 	)
