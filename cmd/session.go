@@ -27,8 +27,10 @@ var (
 
 			// get target
 			argTarget := strings.TrimSpace(viper.GetString("start-session-target"))
+			argTag := strings.TrimSpace(viper.GetString("start-session-filter"))
+
 			if argTarget != "" {
-				table, err := internal.FindInstances(ctx, *_credential.awsConfig)
+				table, err := internal.FindInstances(ctx, *_credential.awsConfig, argTag)
 				if err != nil {
 					panicRed(err)
 				}
@@ -40,7 +42,7 @@ var (
 				}
 			}
 			if target == nil {
-				target, err = internal.AskTarget(ctx, *_credential.awsConfig)
+				target, err = internal.AskTarget(ctx, *_credential.awsConfig, argTag)
 				if err != nil {
 					panicRed(err)
 				}
@@ -80,7 +82,10 @@ var (
 
 func init() {
 	startSessionCommand.Flags().StringP("target", "t", "", "[optional] it is ec2 instanceId.")
+	startSessionCommand.Flags().StringP("filter", "f", "", "[optional] which tag key to add to in table filtering.")
+
 	viper.BindPFlag("start-session-target", startSessionCommand.Flags().Lookup("target"))
+	viper.BindPFlag("start-session-filter", startSessionCommand.Flags().Lookup("filter"))
 
 	// add sub command
 	rootCmd.AddCommand(startSessionCommand)

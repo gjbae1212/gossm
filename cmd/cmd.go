@@ -34,8 +34,9 @@ var (
 
 			// get targets
 			argTarget := strings.TrimSpace(viper.GetString("cmd-target"))
+			argTag := strings.TrimSpace(viper.GetString("cmd-filter"))
 			if argTarget != "" {
-				table, err := internal.FindInstances(ctx, *_credential.awsConfig)
+				table, err := internal.FindInstances(ctx, *_credential.awsConfig, argTag)
 				if err != nil {
 					panicRed(err)
 				}
@@ -86,9 +87,11 @@ var (
 func init() {
 	cmdCommand.Flags().StringP("exec", "e", "", "[required] execute command")
 	cmdCommand.Flags().StringP("target", "t", "", "[optional] it is ec2 instanceId.")
+	cmdCommand.Flags().StringP("filter", "f", "", "[optional] which tag key to add to in table filtering.")
 
 	viper.BindPFlag("cmd-exec", cmdCommand.Flags().Lookup("exec"))
 	viper.BindPFlag("cmd-target", cmdCommand.Flags().Lookup("target"))
+	viper.BindPFlag("cmd-filter", startSessionCommand.Flags().Lookup("filter"))
 
 	rootCmd.AddCommand(cmdCommand)
 }

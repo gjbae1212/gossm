@@ -32,7 +32,7 @@ var (
 			var sshCommand string
 			var targetName string
 			if exec == "" {
-				target, err := internal.AskTarget(ctx, *_credential.awsConfig)
+				target, err := internal.AskTarget(ctx, *_credential.awsConfig, "")
 				if err != nil {
 					panicRed(err)
 				}
