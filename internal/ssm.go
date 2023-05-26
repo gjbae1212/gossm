@@ -141,8 +141,8 @@ func AskTarget(ctx context.Context, cfg aws.Config, tag string) (*Target, error)
 }
 
 // AskMultiTarget asks you which selects multi targets.
-func AskMultiTarget(ctx context.Context, cfg aws.Config) ([]*Target, error) {
-	table, err := FindInstances(ctx, cfg, "")
+func AskMultiTarget(ctx context.Context, cfg aws.Config, tag string) ([]*Target, error) {
+	table, err := FindInstances(ctx, cfg, tag)
 	if err != nil {
 		return nil, err
 	}

@@ -35,6 +35,7 @@ var (
 			// get targets
 			argTarget := strings.TrimSpace(viper.GetString("cmd-target"))
 			argTag := strings.TrimSpace(viper.GetString("cmd-filter"))
+
 			if argTarget != "" {
 				table, err := internal.FindInstances(ctx, *_credential.awsConfig, argTag)
 				if err != nil {
@@ -49,7 +50,7 @@ var (
 			}
 
 			if len(targets) == 0 {
-				targets, err = internal.AskMultiTarget(ctx, *_credential.awsConfig)
+				targets, err = internal.AskMultiTarget(ctx, *_credential.awsConfig, argTag)
 				if err != nil {
 					panicRed(err)
 				}
@@ -91,7 +92,7 @@ func init() {
 
 	viper.BindPFlag("cmd-exec", cmdCommand.Flags().Lookup("exec"))
 	viper.BindPFlag("cmd-target", cmdCommand.Flags().Lookup("target"))
-	viper.BindPFlag("cmd-filter", startSessionCommand.Flags().Lookup("filter"))
+	viper.BindPFlag("cmd-filter", cmdCommand.Flags().Lookup("filter"))
 
 	rootCmd.AddCommand(cmdCommand)
 }
