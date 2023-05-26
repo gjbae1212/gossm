@@ -28,7 +28,7 @@ func TestFindInstances(t *testing.T) {
 	}
 
 	for _, t := range tests {
-		result, err := FindInstances(t.ctx, t.cfg)
+		result, err := FindInstances(t.ctx, t.cfg, "")
 		assert.Equal(t.isErr, err != nil)
 		fmt.Println(len(result))
 	}

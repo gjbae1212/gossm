@@ -110,8 +110,8 @@ func AskRegion(ctx context.Context, cfg aws.Config) (*Region, error) {
 }
 
 // AskTarget asks you which selects an instance.
-func AskTarget(ctx context.Context, cfg aws.Config) (*Target, error) {
-	table, err := FindInstances(ctx, cfg)
+func AskTarget(ctx context.Context, cfg aws.Config, tag string) (*Target, error) {
+	table, err := FindInstances(ctx, cfg, tag)
 	if err != nil {
 		return nil, err
 	}
@@ -141,8 +141,8 @@ func AskTarget(ctx context.Context, cfg aws.Config) (*Target, error) {
 }
 
 // AskMultiTarget asks you which selects multi targets.
-func AskMultiTarget(ctx context.Context, cfg aws.Config) ([]*Target, error) {
-	table, err := FindInstances(ctx, cfg)
+func AskMultiTarget(ctx context.Context, cfg aws.Config, tag string) ([]*Target, error) {
+	table, err := FindInstances(ctx, cfg, tag)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +207,7 @@ func AskPorts() (port *Port, retErr error) {
 }
 
 // FindInstances returns all of instances-map with running state.
-func FindInstances(ctx context.Context, cfg aws.Config) (map[string]*Target, error) {
+func FindInstances(ctx context.Context, cfg aws.Config, filterTag string) (map[string]*Target, error) {
 	var (
 		client     = ec2.NewFromConfig(cfg)
 		table      = make(map[string]*Target)
@@ -215,13 +215,22 @@ func FindInstances(ctx context.Context, cfg aws.Config) (map[string]*Target, err
 			for _, rv := range output.Reservations {
 				for _, inst := range rv.Instances {
 					name := ""
+					tags := ""
 					for _, tag := range inst.Tags {
 						if aws.ToString(tag.Key) == "Name" {
 							name = aws.ToString(tag.Value)
-							break
+						} else {
+							if len(filterTag) > 0 {
+								if aws.ToString(tag.Key) == filterTag {
+									tags += fmt.Sprintf("%s:%s, ", aws.ToString(tag.Key), aws.ToString(tag.Value))
+								}
+							}
 						}
 					}
-					table[fmt.Sprintf("%s\t(%s)", name, *inst.InstanceId)] = &Target{
+					if len(tags) > 0 {
+						tags = strings.TrimSuffix(tags, ", ")
+					}
+					table[fmt.Sprintf("%s\t(%s)\t(%s)", name, *inst.InstanceId, tags)] = &Target{
 						Name:          aws.ToString(inst.InstanceId),
 						PublicDomain:  aws.ToString(inst.PublicDnsName),
 						PrivateDomain: aws.ToString(inst.PrivateDnsName),

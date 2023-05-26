@@ -31,8 +31,9 @@ var (
 
 			// get target
 			argTarget := strings.TrimSpace(viper.GetString("fwd-target"))
+			argTag := strings.TrimSpace(viper.GetString("fwd-filter"))
 			if argTarget != "" {
-				table, err := internal.FindInstances(ctx, *_credential.awsConfig)
+				table, err := internal.FindInstances(ctx, *_credential.awsConfig, argTag)
 				if err != nil {
 					panicRed(err)
 				}
@@ -44,7 +45,7 @@ var (
 				}
 			}
 			if target == nil {
-				target, err = internal.AskTarget(ctx, *_credential.awsConfig)
+				target, err = internal.AskTarget(ctx, *_credential.awsConfig, argTag)
 				if err != nil {
 					panicRed(err)
 				}
@@ -131,12 +132,14 @@ func init() {
 	fwdremCommand.Flags().StringP("local", "l", "", "[optional] local port to use, ex) 1234")
 	fwdremCommand.Flags().StringP("target", "t", "", "[optional] it is ec2 instanceId to proxy through.")
 	fwdremCommand.Flags().StringP("host", "a", "", "[optional] it is remote host address to proxy to.")
+	fwdremCommand.Flags().StringP("filter", "f", "", "[optional] which tag key to add to in table filtering.")
 
 	// mapping viper
 	viper.BindPFlag("fwd-remote-port", fwdremCommand.Flags().Lookup("remote"))
 	viper.BindPFlag("fwd-local-port", fwdremCommand.Flags().Lookup("local"))
 	viper.BindPFlag("fwd-target", fwdremCommand.Flags().Lookup("target"))
 	viper.BindPFlag("fwd-host", fwdremCommand.Flags().Lookup("host"))
+	viper.BindPFlag("fwd-filter", fwdremCommand.Flags().Lookup("filter"))
 
 	rootCmd.AddCommand(fwdremCommand)
 }
