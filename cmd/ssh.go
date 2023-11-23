@@ -32,13 +32,13 @@ var (
 			var sshCommand string
 			var targetName string
 			if exec == "" {
+				user := strings.TrimSpace(viper.GetString("ssh-user"))
 				target, err := internal.AskTarget(ctx, *_credential.awsConfig)
 				if err != nil {
 					panicRed(err)
 				}
 				targetName = target.Name
-
-				sshUser, err := internal.AskUser()
+				sshUser, err := internal.AskUser(user)
 				if err != nil {
 					panicRed(err)
 				}
@@ -120,10 +120,12 @@ func init() {
 	// add sub command
 	sshCommand.Flags().StringP("exec", "e", "", "[optional] ssh $exec, ex) \"-i ex.pem ubuntu@server\"")
 	sshCommand.Flags().StringP("identity", "i", "", "[optional] identity file path, ex) $HOME/.ssh/id_rsa")
+	sshCommand.Flags().StringP("user", "u", "", "[optional] ssh username, ex) ubuntu")
 
 	// mapping viper
 	viper.BindPFlag("ssh-exec", sshCommand.Flags().Lookup("exec"))
 	viper.BindPFlag("ssh-identity", sshCommand.Flags().Lookup("identity"))
+	viper.BindPFlag("ssh-user", sshCommand.Flags().Lookup("user"))
 
 	rootCmd.AddCommand(sshCommand)
 }
