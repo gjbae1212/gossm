@@ -32,13 +32,13 @@ var (
 			var sshCommand string
 			var targetName string
 			if exec == "" {
+				user := strings.TrimSpace(viper.GetString("ssh-user"))
 				target, err := internal.AskTarget(ctx, *_credential.awsConfig)
 				if err != nil {
 					panicRed(err)
 				}
 				targetName = target.Name
-
-				sshUser, err := internal.AskUser()
+				sshUser, err := internal.AskUser(user)
 				if err != nil {
 					panicRed(err)
 				}
@@ -93,11 +93,17 @@ var (
 			}
 
 			// call ssh
+			sshArgsFromCommand := strings.TrimSpace(viper.GetString("ssh-args"))
 			proxy := fmt.Sprintf("ProxyCommand=%s '%s' %s %s %s '%s'",
 				_credential.ssmPluginPath, string(sessJson), _credential.awsConfig.Region,
 				"StartSession", _credential.awsProfile, string(paramsJson))
 			sshArgs := []string{"-o", proxy}
 			for _, sep := range strings.Split(sshCommand, " ") {
+				if sep != "" {
+					sshArgs = append(sshArgs, sep)
+				}
+			}
+			for _, sep := range strings.Split(sshArgsFromCommand, " ") {
 				if sep != "" {
 					sshArgs = append(sshArgs, sep)
 				}
@@ -120,10 +126,14 @@ func init() {
 	// add sub command
 	sshCommand.Flags().StringP("exec", "e", "", "[optional] ssh $exec, ex) \"-i ex.pem ubuntu@server\"")
 	sshCommand.Flags().StringP("identity", "i", "", "[optional] identity file path, ex) $HOME/.ssh/id_rsa")
+	sshCommand.Flags().StringP("user", "u", "", "[optional] ssh username, ex) ubuntu")
+	sshCommand.Flags().StringP("args", "a", "", "[optional] ssh $args, ex) \"-o UserKnownHostsFile=/dev/null -A\"")
 
 	// mapping viper
 	viper.BindPFlag("ssh-exec", sshCommand.Flags().Lookup("exec"))
 	viper.BindPFlag("ssh-identity", sshCommand.Flags().Lookup("identity"))
+	viper.BindPFlag("ssh-user", sshCommand.Flags().Lookup("user"))
+	viper.BindPFlag("ssh-args", sshCommand.Flags().Lookup("args"))
 
 	rootCmd.AddCommand(sshCommand)
 }

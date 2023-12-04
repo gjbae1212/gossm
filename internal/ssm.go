@@ -63,9 +63,12 @@ type (
 )
 
 // AskUser asks you which selects a user.
-func AskUser() (*User, error) {
+func AskUser(username string) (*User, error) {
 	prompt := &survey.Input{
 		Message: "Type your connect ssh user (default: root):",
+	}
+	if username != "" {
+		return &User{Name: username}, nil
 	}
 	var user string
 	survey.AskOne(prompt, &user)
