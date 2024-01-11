@@ -58,7 +58,7 @@ $ brew upgrade gossm
 | -p             | (optional) if you are having multiple aws profiles in credentials, it is name one of profiles | default |
 | -r             | (optional) region in AWS that would like to connect |  |
 
-If your machine don't exist $HOME/.aws/.credentials, have to pass `-c` args.  
+If your machine don't exist $HOME/.aws/credentials, have to pass `-c` args.  
 ```
 # credentials file format
 [default]
