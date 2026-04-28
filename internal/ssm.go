@@ -25,6 +25,9 @@ import (
 
 const (
 	maxOutputResults = 50
+	// SSM document names for run-command targets.
+	SSMDocumentRunShellScript      = "AWS-RunShellScript"
+	SSMDocumentRunPowerShellScript = "AWS-RunPowerShellScript"
 )
 
 var (
@@ -301,6 +304,51 @@ func FindInstanceIdsWithConnectedSSM(ctx context.Context, cfg aws.Config) ([]str
 	return instances, nil
 }
 
+// SplitTargetsByPlatform separates targets by SSM platform type.
+// Unknown platform targets are treated as non-Windows for backward compatibility.
+func SplitTargetsByPlatform(ctx context.Context, cfg aws.Config, targets []*Target) (nonWindows []*Target, windows []*Target, err error) {
+	if len(targets) == 0 {
+		return []*Target{}, []*Target{}, nil
+	}
+
+	platformByInstance := make(map[string]string, len(targets))
+	client := ssm.NewFromConfig(cfg)
+
+	output, err := client.DescribeInstanceInformation(ctx, &ssm.DescribeInstanceInformationInput{MaxResults: maxOutputResults})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, inst := range output.InstanceInformationList {
+		platformByInstance[aws.ToString(inst.InstanceId)] = strings.ToLower(string(inst.PlatformType))
+	}
+
+	for aws.ToString(output.NextToken) != "" {
+		nextOutput, nextErr := client.DescribeInstanceInformation(ctx, &ssm.DescribeInstanceInformationInput{
+			NextToken:  output.NextToken,
+			MaxResults: maxOutputResults,
+		})
+		if nextErr != nil {
+			return nil, nil, nextErr
+		}
+
+		for _, inst := range nextOutput.InstanceInformationList {
+			platformByInstance[aws.ToString(inst.InstanceId)] = strings.ToLower(string(inst.PlatformType))
+		}
+		output = nextOutput
+	}
+
+	for _, target := range targets {
+		if platformByInstance[target.Name] == "windows" {
+			windows = append(windows, target)
+			continue
+		}
+		nonWindows = append(nonWindows, target)
+	}
+
+	return nonWindows, windows, nil
+}
+
 // FindInstanceIdByIp returns instance ids by ip.
 func FindInstanceIdByIp(ctx context.Context, cfg aws.Config, ip string) (string, error) {
 	var (
@@ -461,10 +509,12 @@ func DeleteStartSession(ctx context.Context, cfg aws.Config, input *ssm.Terminat
 
 // SendCommand send commands to instance targets.
 func SendCommand(ctx context.Context, cfg aws.Config, targets []*Target, command string) (*ssm.SendCommandOutput, error) {
-	client := ssm.NewFromConfig(cfg)
+	return SendCommandWithDocument(ctx, cfg, targets, command, SSMDocumentRunShellScript)
+}
 
-	// only support to linux (window = "AWS-RunPowerShellScript")
-	docName := "AWS-RunShellScript"
+// SendCommandWithDocument sends a run-command with the specified SSM document.
+func SendCommandWithDocument(ctx context.Context, cfg aws.Config, targets []*Target, command, documentName string) (*ssm.SendCommandOutput, error) {
+	client := ssm.NewFromConfig(cfg)
 
 	var ids []string
 	for _, t := range targets {
@@ -472,7 +522,7 @@ func SendCommand(ctx context.Context, cfg aws.Config, targets []*Target, command
 	}
 
 	input := &ssm.SendCommandInput{
-		DocumentName:   &docName,
+		DocumentName:   &documentName,
 		InstanceIds:    ids,
 		TimeoutSeconds: 60,
 		CloudWatchOutputConfig: &ssm_types.CloudWatchOutputConfig{

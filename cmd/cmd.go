@@ -22,8 +22,9 @@ var (
 		Long:  "Exec `run command` under AWS SSM with interactive CLI",
 		Run: func(cmd *cobra.Command, args []string) {
 			var (
-				targets []*internal.Target
-				err     error
+				targets     []*internal.Target
+				err         error
+				invocations []*ssm.GetCommandInvocationInput
 			)
 			ctx := context.Background()
 
@@ -61,9 +62,51 @@ var (
 
 			internal.PrintReady(exec, _credential.awsConfig.Region, targetName)
 
-			sendOutput, err := internal.SendCommand(ctx, *_credential.awsConfig, targets, exec)
+			nonWindowsTargets, windowsTargets, err := internal.SplitTargetsByPlatform(ctx, *_credential.awsConfig, targets)
 			if err != nil {
 				panicRed(err)
+			}
+
+			if len(nonWindowsTargets) > 0 {
+				sendOutput, sendErr := internal.SendCommandWithDocument(
+					ctx,
+					*_credential.awsConfig,
+					nonWindowsTargets,
+					exec,
+					internal.SSMDocumentRunShellScript,
+				)
+				if sendErr != nil {
+					panicRed(sendErr)
+				}
+				for _, inst := range sendOutput.Command.InstanceIds {
+					invocations = append(invocations, &ssm.GetCommandInvocationInput{
+						CommandId:  sendOutput.Command.CommandId,
+						InstanceId: aws.String(inst),
+					})
+				}
+			}
+
+			if len(windowsTargets) > 0 {
+				sendOutput, sendErr := internal.SendCommandWithDocument(
+					ctx,
+					*_credential.awsConfig,
+					windowsTargets,
+					exec,
+					internal.SSMDocumentRunPowerShellScript,
+				)
+				if sendErr != nil {
+					panicRed(sendErr)
+				}
+				for _, inst := range sendOutput.Command.InstanceIds {
+					invocations = append(invocations, &ssm.GetCommandInvocationInput{
+						CommandId:  sendOutput.Command.CommandId,
+						InstanceId: aws.String(inst),
+					})
+				}
+			}
+
+			if len(invocations) == 0 {
+				panicRed(fmt.Errorf("[err] not found available targets"))
 			}
 
 			fmt.Printf("%s\n", color.YellowString("Waiting Response ..."))
@@ -71,14 +114,7 @@ var (
 			time.Sleep(time.Second * 3)
 
 			// show result
-			var inputs []*ssm.GetCommandInvocationInput
-			for _, inst := range sendOutput.Command.InstanceIds {
-				inputs = append(inputs, &ssm.GetCommandInvocationInput{
-					CommandId:  sendOutput.Command.CommandId,
-					InstanceId: aws.String(inst),
-				})
-			}
-			internal.PrintCommandInvocation(ctx, *_credential.awsConfig, inputs)
+			internal.PrintCommandInvocation(ctx, *_credential.awsConfig, invocations)
 		},
 	}
 )
