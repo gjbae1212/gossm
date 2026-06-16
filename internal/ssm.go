@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -20,6 +21,7 @@ import (
 	ec2_types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssm_types "github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/fatih/color"
 )
 
@@ -493,8 +495,60 @@ func AskHost() (host string, retErr error) {
 // CreateStartSession creates start session.
 func CreateStartSession(ctx context.Context, cfg aws.Config, input *ssm.StartSessionInput) (*ssm.StartSessionOutput, error) {
 	client := ssm.NewFromConfig(cfg)
+	out, err := client.StartSession(ctx, input)
+	if err != nil {
+		return nil, WrapError(enrichStartSessionError(err, cfg.Region, aws.ToString(input.Target)))
+	}
 
-	return client.StartSession(ctx, input)
+	return out, nil
+}
+
+func enrichStartSessionError(err error, region, target string) error {
+	if err == nil {
+		return nil
+	}
+
+	var (
+		statusCode int
+		requestID  string
+		hostID     string
+	)
+
+	var respErr *smithyhttp.ResponseError
+	if errors.As(err, &respErr) && respErr.Response != nil {
+		statusCode = respErr.Response.StatusCode
+		if requestID == "" {
+			requestID = respErr.Response.Header.Get("x-amzn-RequestId")
+		}
+		if requestID == "" {
+			requestID = respErr.Response.Header.Get("x-amz-request-id")
+		}
+		if hostID == "" {
+			hostID = respErr.Response.Header.Get("x-amz-id-2")
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("SSM StartSession failed (region=%s, target=%s)", region, target))
+	if statusCode > 0 {
+		b.WriteString(fmt.Sprintf(", status=%d(%s)", statusCode, http.StatusText(statusCode)))
+	}
+	if requestID != "" {
+		b.WriteString(fmt.Sprintf(", requestID=%s", requestID))
+	}
+	if hostID != "" {
+		b.WriteString(fmt.Sprintf(", hostID=%s", hostID))
+	}
+	b.WriteString(fmt.Sprintf(", cause=%v", err))
+
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "deserialization failed") || strings.Contains(msg, "invalid character") {
+		b.WriteString(". The response body was not valid AWS JSON. This usually means a proxy/WAF/network middleware intercepted the call.")
+		b.WriteString(fmt.Sprintf(" Check proxy env vars: HTTP_PROXY=%q HTTPS_PROXY=%q NO_PROXY=%q ALL_PROXY=%q", os.Getenv("HTTP_PROXY"), os.Getenv("HTTPS_PROXY"), os.Getenv("NO_PROXY"), os.Getenv("ALL_PROXY")))
+		b.WriteString(". Ensure direct access to ssm, ssmmessages and ec2messages endpoints for the target region.")
+	}
+
+	return errors.New(b.String())
 }
 
 // DeleteStartSession creates session.

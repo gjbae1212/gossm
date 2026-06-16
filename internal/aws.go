@@ -2,12 +2,43 @@ package internal
 
 import (
 	"context"
+	"crypto/tls"
+	"net"
+	"net/http"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+)
+
+func newAWSHTTPClient() aws.HTTPClient {
+	return awshttp.NewBuildableClient().
+		WithDialerOptions(func(d *net.Dialer) {
+			d.Timeout = defaultDialTimeout
+			d.KeepAlive = defaultDialKeepAlive
+		}).
+		WithTransportOptions(func(tr *http.Transport) {
+			tr.Proxy = http.ProxyFromEnvironment
+			tr.ForceAttemptHTTP2 = false
+			tr.MaxIdleConns = defaultMaxIdleConns
+			tr.IdleConnTimeout = defaultIdleConnTimeout
+			tr.TLSHandshakeTimeout = defaultTLSHandshakeTimeout
+			tr.ExpectContinueTimeout = defaultExpectContinueTimeout
+			tr.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+		})
+}
+
+const (
+	defaultDialTimeout           = 30 * time.Second
+	defaultDialKeepAlive         = 30 * time.Second
+	defaultMaxIdleConns          = 100
+	defaultIdleConnTimeout       = 90 * time.Second
+	defaultTLSHandshakeTimeout   = 10 * time.Second
+	defaultExpectContinueTimeout = 1 * time.Second
 )
 
 // NewConfig creates a config for accessing AWS with passing credential parameters.
@@ -24,6 +55,7 @@ func NewConfig(ctx context.Context, key, secret, session, region, roleArn string
 	if region != "" {
 		opts = append(opts, config.WithRegion(region))
 	}
+	opts = append(opts, config.WithHTTPClient(newAWSHTTPClient()))
 
 	// if parameters for credentials doesn't pass it.
 	if key == "" || secret == "" {
@@ -56,6 +88,7 @@ func NewSharedConfig(ctx context.Context, profile string, sharedConfigFiles, sha
 		config.WithSharedConfigProfile(profile),
 		config.WithSharedConfigFiles(sharedConfigFiles),
 		config.WithSharedCredentialsFiles(sharedCredentialsFiles),
+		config.WithHTTPClient(newAWSHTTPClient()),
 	)
 	if err != nil {
 		return aws.Config{}, WrapError(err)
