@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -20,24 +21,28 @@ import (
 	ec2_types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssm_types "github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/fatih/color"
 )
 
 const (
 	maxOutputResults = 50
+	// SSM document names for run-command targets.
+	SSMDocumentRunShellScript      = "AWS-RunShellScript"
+	SSMDocumentRunPowerShellScript = "AWS-RunPowerShellScript"
 )
 
 var (
 	// default aws regions
 	defaultAwsRegions = []string{
 		"af-south-1",
-		"ap-east-1", "ap-northeast-1", "ap-northeast-2", "ap-northeast-3", "ap-south-1", "ap-southeast-2", "ap-southeast-3",
+		"ap-east-1", "ap-northeast-1", "ap-southeast-1", "ap-northeast-2", "ap-northeast-3", "ap-south-1", "ap-south-2", "ap-southeast-2", "ap-southeast-3", "ap-southeast-4",
 		"ca-central-1",
 		"cn-north-1", "cn-northwest-1",
-		"eu-central-1", "eu-north-1", "eu-south-1", "eu-west-1", "eu-west-2", "eu-west-3",
-		"me-south-1",
+		"eu-central-1", "eu-central-2", "eu-north-1", "eu-south-1", "eu-west-1", "eu-west-2", "eu-west-3", "eu-south-2",
+		"me-south-1", "me-central-1",
 		"sa-east-1",
-		"us-east-1", "us-east-2", "us-gov-east-1", "us-gov-west-2", "us-west-1", "us-west-2",
+		"us-east-1", "us-east-2", "us-gov-east-1", "us-gov-west-1", "us-west-1", "us-west-2",
 	}
 )
 
@@ -301,6 +306,51 @@ func FindInstanceIdsWithConnectedSSM(ctx context.Context, cfg aws.Config) ([]str
 	return instances, nil
 }
 
+// SplitTargetsByPlatform separates targets by SSM platform type.
+// Unknown platform targets are treated as non-Windows for backward compatibility.
+func SplitTargetsByPlatform(ctx context.Context, cfg aws.Config, targets []*Target) (nonWindows []*Target, windows []*Target, err error) {
+	if len(targets) == 0 {
+		return []*Target{}, []*Target{}, nil
+	}
+
+	platformByInstance := make(map[string]string, len(targets))
+	client := ssm.NewFromConfig(cfg)
+
+	output, err := client.DescribeInstanceInformation(ctx, &ssm.DescribeInstanceInformationInput{MaxResults: maxOutputResults})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, inst := range output.InstanceInformationList {
+		platformByInstance[aws.ToString(inst.InstanceId)] = strings.ToLower(string(inst.PlatformType))
+	}
+
+	for aws.ToString(output.NextToken) != "" {
+		nextOutput, nextErr := client.DescribeInstanceInformation(ctx, &ssm.DescribeInstanceInformationInput{
+			NextToken:  output.NextToken,
+			MaxResults: maxOutputResults,
+		})
+		if nextErr != nil {
+			return nil, nil, nextErr
+		}
+
+		for _, inst := range nextOutput.InstanceInformationList {
+			platformByInstance[aws.ToString(inst.InstanceId)] = strings.ToLower(string(inst.PlatformType))
+		}
+		output = nextOutput
+	}
+
+	for _, target := range targets {
+		if platformByInstance[target.Name] == "windows" {
+			windows = append(windows, target)
+			continue
+		}
+		nonWindows = append(nonWindows, target)
+	}
+
+	return nonWindows, windows, nil
+}
+
 // FindInstanceIdByIp returns instance ids by ip.
 func FindInstanceIdByIp(ctx context.Context, cfg aws.Config, ip string) (string, error) {
 	var (
@@ -445,8 +495,60 @@ func AskHost() (host string, retErr error) {
 // CreateStartSession creates start session.
 func CreateStartSession(ctx context.Context, cfg aws.Config, input *ssm.StartSessionInput) (*ssm.StartSessionOutput, error) {
 	client := ssm.NewFromConfig(cfg)
+	out, err := client.StartSession(ctx, input)
+	if err != nil {
+		return nil, WrapError(enrichStartSessionError(err, cfg.Region, aws.ToString(input.Target)))
+	}
 
-	return client.StartSession(ctx, input)
+	return out, nil
+}
+
+func enrichStartSessionError(err error, region, target string) error {
+	if err == nil {
+		return nil
+	}
+
+	var (
+		statusCode int
+		requestID  string
+		hostID     string
+	)
+
+	var respErr *smithyhttp.ResponseError
+	if errors.As(err, &respErr) && respErr.Response != nil {
+		statusCode = respErr.Response.StatusCode
+		if requestID == "" {
+			requestID = respErr.Response.Header.Get("x-amzn-RequestId")
+		}
+		if requestID == "" {
+			requestID = respErr.Response.Header.Get("x-amz-request-id")
+		}
+		if hostID == "" {
+			hostID = respErr.Response.Header.Get("x-amz-id-2")
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("SSM StartSession failed (region=%s, target=%s)", region, target))
+	if statusCode > 0 {
+		b.WriteString(fmt.Sprintf(", status=%d(%s)", statusCode, http.StatusText(statusCode)))
+	}
+	if requestID != "" {
+		b.WriteString(fmt.Sprintf(", requestID=%s", requestID))
+	}
+	if hostID != "" {
+		b.WriteString(fmt.Sprintf(", hostID=%s", hostID))
+	}
+	b.WriteString(fmt.Sprintf(", cause=%v", err))
+
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "deserialization failed") || strings.Contains(msg, "invalid character") {
+		b.WriteString(". The response body was not valid AWS JSON. This usually means a proxy/WAF/network middleware intercepted the call.")
+		b.WriteString(fmt.Sprintf(" Check proxy env vars: HTTP_PROXY=%q HTTPS_PROXY=%q NO_PROXY=%q ALL_PROXY=%q", os.Getenv("HTTP_PROXY"), os.Getenv("HTTPS_PROXY"), os.Getenv("NO_PROXY"), os.Getenv("ALL_PROXY")))
+		b.WriteString(". Ensure direct access to ssm, ssmmessages and ec2messages endpoints for the target region.")
+	}
+
+	return errors.New(b.String())
 }
 
 // DeleteStartSession creates session.
@@ -461,10 +563,12 @@ func DeleteStartSession(ctx context.Context, cfg aws.Config, input *ssm.Terminat
 
 // SendCommand send commands to instance targets.
 func SendCommand(ctx context.Context, cfg aws.Config, targets []*Target, command string) (*ssm.SendCommandOutput, error) {
-	client := ssm.NewFromConfig(cfg)
+	return SendCommandWithDocument(ctx, cfg, targets, command, SSMDocumentRunShellScript)
+}
 
-	// only support to linux (window = "AWS-RunPowerShellScript")
-	docName := "AWS-RunShellScript"
+// SendCommandWithDocument sends a run-command with the specified SSM document.
+func SendCommandWithDocument(ctx context.Context, cfg aws.Config, targets []*Target, command, documentName string) (*ssm.SendCommandOutput, error) {
+	client := ssm.NewFromConfig(cfg)
 
 	var ids []string
 	for _, t := range targets {
@@ -472,7 +576,7 @@ func SendCommand(ctx context.Context, cfg aws.Config, targets []*Target, command
 	}
 
 	input := &ssm.SendCommandInput{
-		DocumentName:   &docName,
+		DocumentName:   &documentName,
 		InstanceIds:    ids,
 		TimeoutSeconds: 60,
 		CloudWatchOutputConfig: &ssm_types.CloudWatchOutputConfig{
